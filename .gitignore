@@ -59,3 +59,4 @@ SCPH*.BIN
 *.AppImage
 __pycache__/
 *.log
+/tools/verify-disc/target

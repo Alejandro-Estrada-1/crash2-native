@@ -1,0 +1,8 @@
+[package]
+name = "verify-disc"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Verifica imágenes de disco de Crash Bandicoot 2 (SCUS-94154) contra game.toml y Redump"
+
+[dependencies]
