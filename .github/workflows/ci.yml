@@ -1,0 +1,135 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build-and-test:
+    name: Build y pruebas sin disco (ubuntu:22.04)
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:22.04
+    permissions:
+      contents: read
+
+    steps:
+      - name: Instalar dependencias de sistema en ubuntu:22.04
+        run: |
+          set -euo pipefail
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates curl xz-utils git \
+            build-essential cmake ninja-build pkg-config \
+            libssl-dev zlib1g-dev libgl1-mesa-dev \
+            libxtst-dev libx11-dev libxext-dev libxrandr-dev libxcursor-dev \
+            libxfixes-dev libxi-dev libxss-dev libxkbcommon-dev \
+            libasound2-dev libpulse-dev libudev-dev \
+            libfreetype-dev libharfbuzz-dev
+          rm -rf /var/lib/apt/lists/*
+          git config --global --add safe.directory '*'
+
+      - name: Checkout con submódulos
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          submodules: recursive
+
+      - name: Instalar Python 3.11
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.11"
+
+      - name: Instalar Rust estable (clippy)
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: stable
+          components: clippy
+
+      - name: Ejecutar scripts/setup.sh --sin-disco
+        run: bash scripts/setup.sh --sin-disco
+
+      - name: Cache de fuentes de SDL3
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: .cache/sdl3-src
+          key: sdl3-3.4.10-src
+
+      - name: Prefetch de SDL3 con verificación SHA-256
+        run: |
+          set -euo pipefail
+          OUT=".cache/sdl3-src"
+          if [[ -f "${OUT}/CMakeLists.txt" ]]; then
+            echo "PSX_SDL3_SOURCE_DIR=$(cd "${OUT}" && pwd)" >>"${GITHUB_ENV}"
+          else
+            bash psxrecomp/tools/ci/prefetch_sdl3.sh --out-dir "${OUT}"
+          fi
+
+      - name: Compilar runtime setup host (sin disco)
+        run: |
+          set -euo pipefail
+          JOBS="$(nproc)"
+          bash scripts/build_linux.sh --setup-host -j "${JOBS}"
+          exe_name="$(cat build-setup/psxrecomp_exe_name-psx-runtime.txt)"
+          test -x "build-setup/${exe_name}"
+
+      - name: Probar tools/verify-disc (sin disco del juego)
+        run: |
+          set -euo pipefail
+          cargo test --locked --manifest-path tools/verify-disc/Cargo.toml
+          cargo clippy --locked --manifest-path tools/verify-disc/Cargo.toml --all-targets -- -D warnings
+
+          cargo build --locked --release --manifest-path tools/verify-disc/Cargo.toml
+          BIN="tools/verify-disc/target/release/verify-disc"
+          "${BIN}" --help >/dev/null
+
+          # Verificación CLI de extremo a extremo con imagen sintética temporal
+          TMPDIR="$(mktemp -d)"
+          trap 'rm -rf "${TMPDIR}"' EXIT
+          python3 - "${TMPDIR}" <<'PY'
+          import hashlib, pathlib, sys, zlib
+          d = pathlib.Path(sys.argv[1])
+          payload = b"CRASH2_SYNTHETIC_SECTOR_" * 98  # 2352 bytes = 1 sector
+          (d / "synth.bin").write_bytes(payload)
+          (d / "synth.cue").write_text('FILE "synth.bin" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n', encoding="utf-8")
+          crc = f"{zlib.crc32(payload) & 0xffffffff:08x}"
+          md5 = hashlib.md5(payload).hexdigest()
+          sha1 = hashlib.sha1(payload).hexdigest()
+          (d / "ok.toml").write_text(
+              f'[game]\nid = "SCUS-94154"\ndisc = "synth.cue"\n\n'
+              f'[prepare_disc]\nknown_sizes = [{len(payload)}]\n'
+              f'known_md5 = ["{md5}"]\nknown_sha1 = ["{sha1}"]\nknown_crc32 = ["{crc}"]\n',
+              encoding="utf-8",
+          )
+          (d / "bad.toml").write_text(
+              f'[game]\ndisc = "synth.cue"\n\n[prepare_disc]\n'
+              f'known_sizes = [{len(payload)}]\nknown_crc32 = ["00000000"]\n',
+              encoding="utf-8",
+          )
+          PY
+
+          "${BIN}" --config "${TMPDIR}/ok.toml" --json
+          rc=0; "${BIN}" --config "${TMPDIR}/bad.toml" >/dev/null || rc=$?
+          test "${rc}" -eq 3
+          rc=0; "${BIN}" --config "${TMPDIR}/missing.toml" 2>/dev/null || rc=$?
+          test "${rc}" -eq 2
+
+      - name: Sintaxis de scripts e higiene de archivos prohibidos
+        run: |
+          set -euo pipefail
+          bash -n scripts/*.sh
+          if [[ -f scripts/gdb-psx ]]; then
+            bash -n scripts/gdb-psx
+          fi
+          if git ls-files | grep -Eq '^(disc|generated|prepared_disc|ghidra)(/|$)'; then
+            echo "error: hay archivos prohibidos del juego rastreados en git" >&2
+            exit 1
+          fi
