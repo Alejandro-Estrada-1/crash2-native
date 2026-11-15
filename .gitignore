@@ -9,12 +9,42 @@
 /build-*
 /ghidra
 
+# Áreas de trabajo de psxrecomp_cli.py con bytes del disco: el ejecutable y
+# SYSTEM.CNF extraídos ([prepare_disc] out_dir), la caché y BIOS locales.
+/prepared_disc
+/.cache
+/bios
+/saves
+/analysis
+
+# Configuración local del runtime (rutas del usuario)
+bios.cfg
+disc.cfg
+rom.cfg
+settings.toml
+
+# Artefactos del runtime al lanzarlo desde la raíz
+overlay_captures.json
+psx_crash.txt
+psx_last_run_report.json
+psx_screenshot.bmp
+psx_freeze_heartbeat.json
+.psxrecomp_last_generate
+.psxrecomp_write_probe
+starvation_dump.jsonl
+# Volcado de probe_disc.py: contiene rutas locales
+/disc_probe.json
+
 # Imágenes de disco y ejecutables extraídos, estén donde estén
 *.cue
 *.bin
 *.chd
 *.iso
+*.img
+*.sub
+*.ccd
 SCUS_*
+SCPH*.BIN
 
 # Proyectos de Ghidra fuera de /ghidra/
 *.gpr
@@ -26,5 +56,6 @@ SCUS_*
 *.sstate
 
 # Varios
-/.cache/
 *.AppImage
+__pycache__/
+*.log
