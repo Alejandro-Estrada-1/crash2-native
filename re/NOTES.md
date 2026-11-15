@@ -184,6 +184,28 @@ Registro vivo del análisis estático y dinámico de *Crash Bandicoot 2: Cortex 
   - `descartado` para el menú de pausa: `0x80016868` no se dispara ahí (`0 / 23`), porque el menú de pausa mantiene el render del fondo por encima de 1 VSync.
 - **Siguiente paso:** Revisión humana para promover `rcnt2_tick_isr` (`0x8003be88`) y `frame_counter` (`0x8006ccf0`) a `re/symbols.csv`; si interesa ver `0x80016868` activo (>0), probar en una pantalla 2D pura (p. ej. pantalla de título / carga).
 
+### 2026-11-15 — Análisis estático de `0x8004A3xx` y rutinas de parcheo en RAM (PsyQ 4.0)
+
+- **Módulo:** `main` (`SCUS_941.54`, rango de imagen `[0x80010000, 0x8005f800)`).
+- **Hipótesis / Pregunta:** Qué código vive en `0x8004A3xx`, si ese rango se modifica a sí mismo en RAM o si modifica otro código en memoria en tiempo de ejecución.
+- **Evidencia estática (Ghidra `ghidra_psx_ldr` + inspección del binario `SCUS_941.54`):**
+  - El rango `0x8004a2b4..0x8004a47c` corresponde a funciones de `libapi` (PsyQ 4.0) enlazadas en `main`:
+    - `0x8004a2ec..0x8004a34c` (`_patch_pad`, llamada por `InitPAD` en `0x8004a034` y `PAD_init` en `0x80049f98`): llama a `EnterCriticalSection` (`0x80049d1c`), invoca `B0:57` (`GetB0Table`), lee `base = *(B0Table + 0x16c)`, guarda `base + 0x884` en `DAT_8005f32c` (usado por `EnablePAD` `0x8004a2c4`) y `base + 0x894` en `DAT_8005f330` (usado por `DisablePAD` `0x8004a2d8`), **escribe `0` en 11 palabras (`0x2c` bytes) en `base + 0x594..0x5bc`** y llama a `FlushCache` (`0x8004a354`). (`ExitCriticalSection` lo ejecuta el llamador justo después).
+    - `0x8004a354..0x8004a360` (`FlushCache`, `A0:44`): `li t2,0xa0; jr t2; _li t1,0x44`. Unica implementación de `li t1,0x44` en todo `SCUS_941.54`, con 5 XREFs de llamada: `_patch_pad` (`0x8004a338`), `_send_pad` (`0x8004a3e0`), `_remove_ChgclrPAD` (`0x8004a45c`), `_patch_gte` (`0x8004f23c`) y `FUN_8005b118` (`0x8005b15c`).
+    - `0x8004a364..0x8004a388` (`_SendPAD`): llama indirectamente vía `*DAT_8005f338` (0 XREFs de llamada en el binario).
+    - `0x8004a38c..0x8004a420` (`_send_pad`, llamada por `InitPAD` en `0x8004a068` y `PAD_init` en `0x80049fcc`): llama a `EnterCriticalSection`, invoca `B0:57`, lee `base = *(B0Table + 0x16c)`, guarda `base + 0x7a0` en `DAT_8005f338`, **copia las 4 palabras (`0x10` bytes) de `0x8004a408..0x8004a414` (`0x00551024`, `0`, `0`, `0`) en dos zonas del controlador PAD en BIOS RAM (`base + 0x3d8` y `base + 0x4e0`)**, llama a `FlushCache` y `ExitCriticalSection`.
+    - `0x8004a424..0x8004a47c` (`_remove_ChgclrPAD`, llamada por `InitPAD` en `0x8004a024` y `PAD_init` en `0x80049f88`): invoca `B0:57`, lee `base = *(B0Table + 0x16c)`, **escribe `0` en 9 palabras (`0x24` bytes) en `base + 0x62c..0x64c`**, llama a `FlushCache` y `ExitCriticalSection`.
+  - Cadena de llamada en arranque del juego: `start` (`0x80049b2c`) -> `main` (`0x800117bc`) -> `FUN_80015614` (`0x800156d4`) -> `FUN_80015828(2)` (`0x80015890`) -> `InitPAD` (`0x8004a000`) -> `_remove_ChgclrPAD`, `_patch_pad`, `_send_pad`.
+  - Otras rutinas del binario que parchean RAM del kernel vía `GetC0Table` (`B0:56`) y llaman a `FlushCache` (`0x8004a354`):
+    - `_patch_gte` (`0x8004f1f8`, llamada por `InitGeom` `0x8004ec38`): copia 14 palabras (`0x38` bytes, `0x8004f260..0x8004f297`) sobre `*(C0Table + 0x18)` antes de `FlushCache`.
+    - `FUN_8005b118` (`0x8005b118`, posible `_ExitCard`, llamada por `StopCARD` `0x8005b0c0` <- `FUN_80036304`): copia 3 palabras (`0x0c` bytes en `0x8005b180..0x8005b18b`, `0` en el binario) hacia `*(C0Table + 0x18) + 0x70` antes de `FlushCache`.
+  - **Escrituras sobre `0x8004A3xx` (análisis estático):** un barrido completo de `SCUS_941.54` (`0x80010000..0x8005f800`) no encontró ninguna pareja `lui`/`addiu|sw|sh|sb` ni puntero de 32 bits en tablas que apunte a `0x8004a200..0x8004a4ff` para escritura; las referencias a `0x8004a000..0x8004afff` son solo lecturas de constantes/tablas (`0x8004a408..0x8004a418` en `_send_pad`, `_Pad1`, `_IsVSync`) o llamadas `jal`. Sus únicas escrituras dentro de la imagen `[0x80010000, 0x8005f800)` caen en variables de estado/punteros en `0x8005f324..0x8005f344`.
+  - **Nota de compatibilidad con `psxrecomp`:** `psxrecomp` documenta el mecanismo genérico de `_patch_pad` / `_patch_gte` sobre la ventana del kernel (`[0x00000500, 0x00008500)`) en `bios/SCPH1001.toml` y `docs/dynamic_handler_install.md` (medido en SDK 3.70, solo rango `0x4964` len `0x2c` para PAD clear). En Crash 2 (`SCUS_941.54`, PsyQ 4.0), el conjunto real que `InitPAD` modifica en la RAM del BIOS incluye además `_send_pad` (`base + 0x3d8` y `base + 0x4e0`, 16 bytes c/u) y `_remove_ChgclrPAD` (`base + 0x62c`, 36 bytes).
+- **Experimento preparado (pendiente de corrida con PCSX-Redux):** [004-codigo-modificado-8004a3xx.gdb](re/experiments/004-codigo-modificado-8004a3xx.gdb) (solo lectura) para verificar en RAM viva:
+  1. si `0x8004a2ec..0x8004a47c` permanece idéntico palabra por palabra a `SCUS_941.54` (descartando automodificación en `0x8004A3xx`), y
+  2. qué dirección real devuelve `*(B0Table + 0x16c)` (derivada de `*(uint32_t*)0x8005f32c - 0x884`) y qué bytes quedaron parcheados en `base + 0x3d8`, `+0x4e0`, `+0x594` y `+0x62c`.
+- **Estado:** propuesto (evidencia estática completa; falta ejecutar `004` cuando PCSX-Redux esté activo).
+
 ---
 
 ## 5. Resumen de hallazgos verificados
@@ -194,6 +216,8 @@ Registro vivo del análisis estático y dinámico de *Crash Bandicoot 2: Cortex 
 |---|---|---|---|---|
 | `0x8003bea4` | `rcnt2_tick_count` | `main` | `001`, `002` | 2026-11-15 |
 | `0x8001645c` | `frame_end_sync` | `main` | `002` | 2026-11-15 |
+| `0x8003be88` | `rcnt2_tick_isr` | `main` | `003` | 2026-11-15 |
+| `0x8006ccf0` | `frame_counter` | `main` | `002`, `003` | 2026-11-15 |
 
 ### Descartados
 
