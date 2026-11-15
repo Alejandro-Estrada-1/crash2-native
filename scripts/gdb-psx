@@ -17,6 +17,11 @@
 # ignoró el SIGINT y hubo que matarlo con SIGKILL 5 s después.
 #
 # Usa un candado (flock): si otro experimento está en curso, espera hasta 5 minutos.
+#
+# Advertencia para experimentos: PCSX-Redux notifica cualquier pausa por excepción
+# de la CPU (p. ej. vector de excepciones en 0x80000080) como T05 (SIGTRAP) en el
+# servidor GDB; un "continue" en el .gdb puede detenerse ahí antes del breakpoint
+# esperado.
 
 set -uo pipefail
 
