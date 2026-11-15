@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# gdb-psx: GDB conectado al servidor GDB de PCSX-Redux, con timeout.
+#
+# Uso:
+#   scripts/gdb-psx -batch -x re/experiments/NNN-descripcion.gdb
+#
+# Variables de entorno:
+#   PSX_GDB_PORT     puerto del servidor GDB de PCSX-Redux (míralo en su configuración)
+#   PSX_GDB_TIMEOUT  segundos antes de abortar (por defecto 20)
+#   GDB              ejecutable de GDB (por defecto: gdb)
+#
+# Si se agota el tiempo (p. ej. un breakpoint que nunca salta), GDB se interrumpe y
+# este script se reconecta solo para hacer "detach", de modo que el emulador no quede
+# en pausa. Sale con código 124 en ese caso.
+#
+# Usa un candado (flock): si otro experimento está en curso, espera hasta 5 minutos.
+
+set -uo pipefail
+
+PORT="${PSX_GDB_PORT:?Define PSX_GDB_PORT con el puerto del servidor GDB de PCSX-Redux}"
+TIMEOUT="${PSX_GDB_TIMEOUT:-20}"
+GDB="${GDB:-gdb}"
+
+# Candado: un solo experimento a la vez contra el emulador.
+LOCK="${XDG_RUNTIME_DIR:-/tmp}/crash2-native-gdb.lock"
+exec 9>"${LOCK}"
+if ! flock -w 300 9; then
+  echo "gdb-psx: el emulador está ocupado por otro experimento desde hace 5 minutos; abortando." >&2
+  exit 75
+fi
+
+GDB_INIT=(
+  -q -nx
+  -iex "set architecture mips:3000"
+  -iex "set pagination off"
+  -iex "set confirm off"
+  -ex  "target remote localhost:${PORT}"
+)
+
+timeout --signal=INT --kill-after=5 "${TIMEOUT}" "${GDB}" "${GDB_INIT[@]}" "$@"
+status=$?
+
+if [ "${status}" -eq 124 ]; then
+  echo "gdb-psx: TIMEOUT tras ${TIMEOUT}s. El experimento no llegó a su criterio de éxito." >&2
+  if ! timeout 10 "${GDB}" "${GDB_INIT[@]}" -batch -ex "detach" >/dev/null 2>&1; then
+    echo "gdb-psx: AVISO: no pude reanudar el emulador; reanúdalo a mano en PCSX-Redux." >&2
+  fi
+fi
+
+exit "${status}"

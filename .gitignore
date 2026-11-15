@@ -1,0 +1,30 @@
+# --- Datos del juego y resultados: NUNCA en git ---
+# Rutas ancladas a la raíz (con "/" inicial) para no ignorar por accidente
+# carpetas con el mismo nombre, como tools/ghidra/.
+# SIN "/" final: así también se ignoran si son enlaces simbólicos
+# (disc es un enlace a ../privado/disc).
+/disc
+/generated
+/build
+/build-*
+/ghidra
+
+# Imágenes de disco y ejecutables extraídos, estén donde estén
+*.cue
+*.bin
+*.chd
+*.iso
+SCUS_*
+
+# Proyectos de Ghidra fuera de /ghidra/
+*.gpr
+*.rep/
+
+# Memory cards y estados de guardado del emulador
+*.mcd
+*.mcr
+*.sstate
+
+# Varios
+/.cache/
+*.AppImage
