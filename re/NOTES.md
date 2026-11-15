@@ -28,7 +28,7 @@ Registro vivo del análisis estático y dinámico de *Crash Bandicoot 2: Cortex 
 - [x] Crear proyecto de Ghidra (`../privado/ghidra/crash2`) con `ghidra_psx_ldr` (PsyQ 4.0 detectado).
 - [x] Instalar y configurar MCP de Ghidra (`pyghidra-mcp==0.3.0`, `tools/ghidra/sync-ro.sh`, `../privado/ghidra-ro/crash2.gpr`) y verificar lectura de `SCUS_941.54` con lenguaje `PSX:LE:32:default (1.5)`.
 - [x] Primera tarea estática con el MCP: localizar quién escribe en `DAT_8003bea4` y qué función se registra con `VSyncCallback`; propuestas registradas en `re/provisional_symbols.csv`.
-- [x] Verificar dinámicamente en PCSX-Redux el ritmo de `DAT_8003bea4` (~34.5 ticks/cuadro = ~17.25 ticks/VSync) y `0x80016838` (30 Hz) (`001` y `002`); queda pendiente observar disparo de `0x80016868` en escena ligera/pausa.
+- [x] Verificar dinámicamente en PCSX-Redux el ritmo de `DAT_8003bea4` (~34.5 ticks/cuadro = ~17.25 ticks/VSync), `0x80016838` (30 Hz) y la ISR `0x8003be88` 1:1 por cuadro (`001`, `002`, `003`); `0x80016868` dio `0/23` en pausa (queda pendiente solo si se prueba pantalla más ligera como título/carga).
 - [x] Instalar y configurar PCSX-Redux (Build `561`, commit `61e3086f`, intérprete + GDB puerto `3333`) y validar conexión con `scripts/gdb-psx`.
 - [ ] Localizar funciones PsyQ base (`SetGeomScreen`, `DrawOTag`, `VSync`, `CdRead`) y mapear XREFs.
 - [ ] Identificar sistema de carga de overlays (`CdRead` / tabla de módulos).
@@ -173,9 +173,16 @@ Registro vivo del análisis estático y dinámico de *Crash Bandicoot 2: Cortex 
        - Gravedad sobre velocidad Y (`+0x88`) en `0x8001e290`: `*(param_1 + 0x88) += dt * -4000` (tope `0x66`, velocidad terminal `-0x2ee000`).
     - **Observación clave para interpolación / 60+ FPS:** que la física del juego escale explícitamente por `*(DAT_80063450 + 0x14)` (cuantizado a `0x11`/`0x22`/`0x33` y limitado a `0x66`) confirma por qué la lógica no debe alterarse ni duplicarse: cualquier cambio en `rcnt2_tick_count` o `quantize_frame_ticks` afectaría directamente las velocidades, rotaciones y gravedad en `FUN_8001d63c` y `FUN_8001d2c4`.
   - **Propuesta `DAT_8006ccf0` (`frame_counter`):** solo tiene 3 XREFs: lectura y escritura `+1` al inicio de `frame_end_sync` (`0x8001647c`/`0x80016490`) y reinicio a `0` en `FUN_8002efe4` (`0x8002f088`); en `002` dio `delta == 60` en 60 cuadros.
-- **Experimento:** Preparado [003-pausa-vsync-extra-e-isr.gdb](re/experiments/003-pausa-vsync-extra-e-isr.gdb) (pendiente de ejecutar con el juego en el menú de pausa).
-- **Resultado:** `propuesto` (`frame_counter` en `re/provisional_symbols.csv`; análisis estático de `*(DAT_80063450 + 0x14)` documentado).
-- **Siguiente paso:** Ejecutar `003-pausa-vsync-extra-e-isr.gdb` con el juego en el menú de pausa.
+- **Experimento:** [003-pausa-vsync-extra-e-isr.gdb](re/experiments/003-pausa-vsync-extra-e-isr.gdb) ([resumen](re/experiments/003-pausa-vsync-extra-e-isr.md)) ejecutado en menú de pausa (`exit 0`, `detach` limpio).
+  - **Fase A (20 cuadros en pausa):** `disparos 0x80016868 = 0 / 20`, `delta frame_counter (0x8006ccf0) = 20`, `delta rcnt2_tick_count (0x8003bea4) = 691 ticks` (`34.55` ticks/cuadro).
+  - **Fase B (3 cuadros en pausa con breakpoint en `0x8003be88`):**
+    - Cuadro 1: `hits_isr(0x8003be88)=34`, `delta_0x8003bea4=34`, `extra_0x80016868=0`.
+    - Cuadro 2: `hits_isr(0x8003be88)=35`, `delta_0x8003bea4=35`, `extra_0x80016868=0`.
+    - Cuadro 3: `hits_isr(0x8003be88)=34`, `delta_0x8003bea4=34`, `extra_0x80016868=0`.
+- **Resultado:**
+  - `confirmado` dinámicamente (listo para revisión humana): `rcnt2_tick_isr` (`0x8003be88`) coincide 1:1 con `rcnt2_tick_count` (`34/34`, `35/35`, `34/34`) y `frame_counter` (`0x8006ccf0`) coincide 1:1 con los cuadros (`20/20` en `003`, `60/60` en `002`).
+  - `descartado` para el menú de pausa: `0x80016868` no se dispara ahí (`0 / 23`), porque el menú de pausa mantiene el render del fondo por encima de 1 VSync.
+- **Siguiente paso:** Revisión humana para promover `rcnt2_tick_isr` (`0x8003be88`) y `frame_counter` (`0x8006ccf0`) a `re/symbols.csv`; si interesa ver `0x80016868` activo (>0), probar en una pantalla 2D pura (p. ej. pantalla de título / carga).
 
 ---
 
