@@ -16,15 +16,29 @@ project(Crash2Native LANGUAGES C CXX)
 
 # --- Superficies opcionales del framework ----------------------------------
 # Valores por defecto de este proyecto; se pueden cambiar con -D al configurar
-# (sin FORCE, para que la línea de comandos mande).
-# - recomp-ui (launcher) apagado para el primer arranque: menos variables.
-#   Se enciende junto con el asistente de primer uso más adelante.
+# (sin FORCE, para que la línea de comandos mande). Ojo: un build ya
+# configurado conserva el valor de su caché; scripts/build_linux.sh pasa
+# PSX_RECOMP_UI explícito para no depender de eso.
+# - recomp-ui encendido: launcher al arrancar (--no-launcher lo salta), OSD
+#   (FPS con F), menú dentro del juego y asistente Generate & rebuild.
 # - Vulkan apagado: el renderizador por defecto es OpenGL y así la compilación
 #   no depende de que glslc esté instalado o no.
-set(PSX_RECOMP_UI OFF CACHE BOOL "Launcher recomp-ui")
+set(PSX_RECOMP_UI ON CACHE BOOL "Launcher recomp-ui")
 set(PSX_ENABLE_VULKAN OFF CACHE BOOL "Renderizador Vulkan experimental")
 
 include("${PSXRECOMP_ROOT}/runtime/runtime.cmake")
+
+# Con recomp-ui: asistente de primer uso (elige el disco y hace Generate &
+# rebuild en la máquina del usuario) y su configuración en src/codegen_setup.c.
+# Sin generated/ (o con -DPSXRECOMP_FORCE_SETUP_HOST=ON) se compila solo ese
+# "setup host", que es lo que puede compilar el CI sin el disco.
+set(_crash2_ui_args)
+if(PSX_RECOMP_UI)
+    list(APPEND _crash2_ui_args
+        ENABLE_SETUP_WIZARD
+        CODEGEN_SETUP_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src"
+        CODEGEN_SETUP_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/codegen_setup.c")
+endif()
 
 psxrecomp_add_game_runtime(psx-runtime
     PRELOADED_MODS_DIR "NONE"
@@ -33,7 +47,16 @@ psxrecomp_add_game_runtime(psx-runtime
     MAX_PLAYERS 1
     GEN_MARKER "generated/SCUS_941.54_dispatch.c"
     GEN_FULL_GLOB "generated/SCUS_941.54_full_*.c"
+    ${_crash2_ui_args}
 )
+
+# Menú dentro del juego para un título de un disco (ver src/menu_provider.c).
+# Sin recomp-ui el archivo compila vacío.
+foreach(_crash2_t psx-runtime psx-runtime-pgxp)
+    if(TARGET ${_crash2_t})
+        target_sources(${_crash2_t} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/menu_provider.c")
+    endif()
+endforeach()
 
 # Copia game.toml junto al ejecutable para lanzarlo directo desde build-*/.
 add_custom_command(TARGET psx-runtime POST_BUILD
