@@ -771,3 +771,4 @@
 # Criterio: página del texto ejecutada en el intérprete, idéntica byte a byte
 # al ejecutable original, y entrada ausente del C generado.
 0x8004075C  # tabla de punteros a funciones en 0x8005B6FC (sus vecinos sí estaban generados); relleno nop antes; 1.a instr. mfc2
+0x8003AE24  # tabla de 11 punteros en 0x8005C624 (los otros 10 ya eran alias); entra como función de 0xC bytes
