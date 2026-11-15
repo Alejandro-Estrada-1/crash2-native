@@ -9,10 +9,12 @@
 #   PSX_GDB_TIMEOUT  segundos antes de abortar (por defecto 20)
 #   GDB              ejecutable de GDB (por defecto: gdb)
 #
-# Si se agota el tiempo (p. ej. un breakpoint que nunca salta), GDB se interrumpe y
-# este script se reconecta solo para hacer "detach", de modo que el emulador no quede
-# en pausa. Sale con código 124 en ese caso, también si GDB ignoró el SIGINT y hubo
-# que matarlo con SIGKILL 5 s después.
+# Al terminar el experimento (ya sea de forma normal, por timeout o por SIGKILL),
+# este script envía el paquete RSP "c" ($c#63) por TCP para asegurarse de que el
+# emulador no quede en pausa: en PCSX-Redux, "D" (detach) no reanuda la ejecución,
+# mientras que "c" sí la reanuda (y es inocuo si ya está corriendo). Si se agota el
+# tiempo (p. ej. un breakpoint que nunca salta), sale con código 124, también si GDB
+# ignoró el SIGINT y hubo que matarlo con SIGKILL 5 s después.
 #
 # Usa un candado (flock): si otro experimento está en curso, espera hasta 5 minutos.
 
@@ -38,30 +40,46 @@ GDB_INIT=(
   -ex  "target remote localhost:${PORT}"
 )
 
+# Envía "$c#63" (continue, checksum 0x63) por TCP y espera el ACK "+" del stub.
+# Es inocuo si el emulador ya corre y necesario si quedó pausado tras "D" o timeout.
+reanudar_emulador() {
+  local port="$1"
+  timeout 5 bash -c '
+    set -uo pipefail
+    exec 3<>"/dev/tcp/localhost/$1" 2>/dev/null || exit 1
+    for _ in 1 2 3; do
+      printf '\''$c#63'\'' >&3 2>/dev/null || exit 1
+      i=0
+      while [ "${i}" -lt 64 ] && IFS= read -r -t 2 -n 1 ch <&3; do
+        i=$((i + 1))
+        case "${ch}" in
+          "+") exit 0 ;;
+          "-") break ;;
+        esac
+      done
+    done
+    exit 1
+  ' _ "${port}"
+}
+
 inicio=${SECONDS}
 timeout --signal=INT --kill-after=5 "${TIMEOUT}" "${GDB}" "${GDB_INIT[@]}" "$@"
 status=$?
 
 # timeout sale con 124 si GDB terminó tras el SIGINT. Si GDB lo ignora, a los 5 s
 # --kill-after manda SIGKILL a todo el grupo, timeout incluido, y el código es 137.
-# Un 137 antes de agotar el tiempo es un SIGKILL de otro origen; también reconecta,
-# porque el emulador pudo quedar en pausa igual.
-reconectar=0
+# Un 137 antes de agotar el tiempo es un SIGKILL de otro origen.
 if [ "${status}" -eq 124 ] ||
    { [ "${status}" -eq 137 ] && [ $((SECONDS - inicio)) -ge "${TIMEOUT}" ]; }; then
   echo "gdb-psx: TIMEOUT tras ${TIMEOUT}s. El experimento no llegó a su criterio de éxito." >&2
   [ "${status}" -eq 137 ] && echo "gdb-psx: GDB no respondió al SIGINT; se terminó con SIGKILL." >&2
   status=124
-  reconectar=1
 elif [ "${status}" -eq 137 ]; then
   echo "gdb-psx: GDB terminó por SIGKILL antes del timeout." >&2
-  reconectar=1
 fi
 
-if [ "${reconectar}" -eq 1 ]; then
-  if ! timeout 10 "${GDB}" "${GDB_INIT[@]}" -batch -ex "detach" >/dev/null 2>&1; then
-    echo "gdb-psx: AVISO: no pude reanudar el emulador; reanúdalo a mano en PCSX-Redux." >&2
-  fi
+if ! reanudar_emulador "${PORT}"; then
+  echo "gdb-psx: AVISO: no pude reanudar el emulador (¿otro cliente conectado?); reanuda PCSX-Redux a mano." >&2
 fi
 
 exit "${status}"
