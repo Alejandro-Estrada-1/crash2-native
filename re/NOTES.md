@@ -216,7 +216,21 @@ Registro vivo del análisis estático y dinámico de *Crash Bandicoot 2: Cortex 
   - **Punteros poblados en `0x8005f324..0x8005f344`:**
     - `DAT_8005f32c` (`EnablePAD`) = `0xbfc088f4`, `DAT_8005f330` (`DisablePAD`) = `0xbfc08904`, `DAT_8005f338` (`_SendPAD`) = `0x00003f88`.
     - Retornos de `InitPAD` guardados: `DAT_8005f324 = 0x8004a03c`, `DAT_8005f334 = 0x8004a070`, `DAT_8005f344 = 0x8004a02c`.
-- **Resultado:** `confirmado` dinámicamente que **OpenBIOS** (`getB0table` → `patch_hook`) es el autor de las reescrituras en `0x8004a308/a3a8/a440`, descartando que el juego (`SCUS_941.54`) modifique su propio código en `0x8004A3xx`. Listo para revisión humana de los símbolos de `libapi` propuestos si se desean promover a `re/symbols.csv`.
+- **Resultado:** `confirmado` dinámicamente que **OpenBIOS** (`getB0table` → `patch_hook`) es el autor de las reescrituras en `0x8004a308/a3a8/a440`, descartando que el juego (`SCUS_941.54`) modifique su propio código en `0x8004A3xx`. Promovidos a `re/symbols.csv`: `_patch_pad` (`0x8004a2ec`), `_send_pad` (`0x8004a38c`), `_remove_ChgclrPAD` (`0x8004a424`) y `FlushCache` (`0x8004a354`); `_SendPAD` (`0x8004a364`) y `_patch_gte` (`0x8004f1f8`) quedan como `propuesto` (sin prueba en vivo).
+
+### 2026-11-15 — Discrepancia entre versiones de OpenBIOS y propuesta para identificar la BIOS
+
+- **Entorno / Hallazgo:** al comparar los punteros instalados en RAM por OpenBIOS en `004` (PCSX-Redux) contra los observados en el OpenBIOS de `psxrecomp` (`OpenBIOS_full.c`, commit `55fbf04`), las direcciones no coinciden:
+
+| Puntero en juego | PCSX-Redux (`004`) | `psxrecomp` (`55fbf04`, `OpenBIOS_full.c`) |
+|---|---|---|
+| `DAT_8005f32c` (`EnablePAD`) | `0xbfc088f4` | `0xbfc07734` |
+| `DAT_8005f330` (`DisablePAD`) | `0xbfc08904` | `0xbfc07744` |
+| `DAT_8005f338` (`_SendPAD`) | `0x00003f88` | `0x000040b0` |
+
+- **Hipótesis:** PCSX-Redux incluye una versión/compilación distinta de OpenBIOS que la fijada por `psxrecomp` (`55fbf04`); el mecanismo `getB0table` → `patch_hook` es equivalente, pero cambian los desplazamientos internos de la ROM/kernel.
+- **Propuesta de registro exacto de la BIOS por experimento (sin versionar binarios):**
+  - Leer la ROM mapeada en `0xbfc00000..0xbfc80000` (512 KiB) de forma temporal y de solo lectura —por ejemplo, en GDB `dump binary memory /tmp/psx_bios.bin 0xbfc00000 0xbfc80000`, calcular `sha256sum /tmp/psx_bios.bin` (o `crc32`) y borrar `/tmp/psx_bios.bin` de inmediato, o calcular el hash desde consola Lua en PCSX-Redux— y anotar en `# BIOS:` del `.gdb` (ver [000-plantilla.gdb](re/experiments/000-plantilla.gdb)) y en el resumen `.md` el nombre de la BIOS, la build del emulador y ese hash (además de cualquier cadena de versión/build presente en la ROM si aplica).
 
 ---
 
@@ -230,6 +244,10 @@ Registro vivo del análisis estático y dinámico de *Crash Bandicoot 2: Cortex 
 | `0x8001645c` | `frame_end_sync` | `main` | `002` | 2026-11-15 |
 | `0x8003be88` | `rcnt2_tick_isr` | `main` | `003` | 2026-11-15 |
 | `0x8006ccf0` | `frame_counter` | `main` | `002`, `003` | 2026-11-15 |
+| `0x8004a2ec` | `_patch_pad` | `main` | `004` | 2026-11-15 |
+| `0x8004a38c` | `_send_pad` | `main` | `004` | 2026-11-15 |
+| `0x8004a424` | `_remove_ChgclrPAD` | `main` | `004` | 2026-11-15 |
+| `0x8004a354` | `FlushCache` | `main` | estático (`NOTES.md`) | 2026-11-15 |
 
 ### Descartados
 
