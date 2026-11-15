@@ -4,8 +4,12 @@
 #   scripts/build_linux.sh                 # emisores + generar + compilar
 #   scripts/build_linux.sh --sin-generar   # solo recompilar (C ya generado)
 #   scripts/build_linux.sh -j 4            # hilos (también: JOBS=4)
+#   scripts/build_linux.sh --sin-ui        # sin recomp-ui (sin launcher/menú/OSD)
+#   scripts/build_linux.sh --setup-host    # solo el asistente, sin disco ni C
+#                                          # generado (lo que compila el CI)
 #
-# Variables: JOBS (6 por defecto), BUILD_DIR (build-release por defecto).
+# Variables: JOBS (6 por defecto), BUILD_DIR (build-release por defecto),
+# SETUP_DIR (build-setup por defecto, para --setup-host).
 #
 # Pasos:
 #   1. Emisores (psxrecomp-game / psxrecomp-bios) en build-recompiler/, con
@@ -28,14 +32,19 @@ cd "$ROOT"
 
 JOBS="${JOBS:-6}"
 BUILD_DIR="${BUILD_DIR:-build-release}"
+SETUP_DIR="${SETUP_DIR:-build-setup}"
 GENERAR=1
+UI=ON
+SETUP_HOST=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --sin-generar) GENERAR=0; shift ;;
+    --sin-ui) UI=OFF; shift ;;
+    --setup-host) SETUP_HOST=1; shift ;;
     -j) JOBS="${2:?falta el número de hilos}"; shift 2 ;;
     -j*) JOBS="${1#-j}"; shift ;;
-    -h|--help) sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "error: argumento desconocido: $1" >&2; exit 2 ;;
   esac
 done
@@ -48,6 +57,20 @@ error() { printf 'error: %s\n' "$*" >&2; exit 1; }
 export CMAKE_BUILD_PARALLEL_LEVEL="$JOBS"
 
 [[ -f psxrecomp/psxrecomp_cli.py ]] || error "falta el submódulo psxrecomp: corre scripts/setup.sh"
+
+# --- Solo el asistente (setup host) -----------------------------------------
+# Sin disco ni C generado: PSXRECOMP_FORCE_SETUP_HOST hace que CMake ignore
+# generated/ aunque exista. El asistente necesita recomp-ui.
+if ((SETUP_HOST)); then
+  [[ "$UI" == ON ]] || error "--setup-host necesita recomp-ui (no se combina con --sin-ui)"
+  info "Compilando el setup host en $SETUP_DIR/ (-j$JOBS)"
+  cmake -S . -B "$SETUP_DIR" -G Ninja -DCMAKE_BUILD_TYPE=Release \
+    -DPSX_RECOMP_UI=ON -DPSXRECOMP_FORCE_SETUP_HOST=ON
+  cmake --build "$SETUP_DIR" --target psx-runtime --parallel "$JOBS"
+  exe_name="$(cat "$SETUP_DIR/psxrecomp_exe_name-psx-runtime.txt" 2>/dev/null || echo psx-runtime)"
+  info "Listo: $SETUP_DIR/$exe_name"
+  exit 0
+fi
 
 # Valor de una clave "clave = \"valor\"" en game.toml (primera aparición).
 valor_toml() { sed -n "s/^$1 *= *\"\(.*\)\"\$/\1/p" game.toml | head -n1; }
@@ -83,10 +106,13 @@ else
   info "1-2/3 Generación omitida (--sin-generar)"
 fi
 
-info "3/3 Compilando psx-runtime en $BUILD_DIR/ (-j$JOBS)"
+info "3/3 Compilando psx-runtime en $BUILD_DIR/ (recomp-ui $UI, -j$JOBS)"
+# PSX_RECOMP_UI explícito: un build ya configurado conservaría el valor de su
+# caché aunque cambie el valor por defecto del CMakeLists.
 python3 psxrecomp/psxrecomp_cli.py rebuild \
   --config game.toml --project-root . --build-dir "$BUILD_DIR" \
-  --no-pgo --no-toolchain-download
+  --no-pgo --no-toolchain-download \
+  --cmake-extra="-DPSX_RECOMP_UI=$UI"
 
 # El framework versiona su BIOS generada (psxrecomp/generated/OpenBIOS_*);
 # si generate la reescribió, el submódulo queda modificado. Avisar.
