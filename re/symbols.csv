@@ -1,3 +1,5 @@
 address,name,module,hypothesis,evidence,experiment,status,date
 0x8003bea4,rcnt2_tick_count,main,"contador del temporizador RCnt2, ~1033.6 Hz (34.5 ticks por cuadro a 30 FPS)","escrituras: ISR 0x8003be88 (+1); medición: 2071 ticks en 60 cuadros","re/experiments/001-ticks-rcnt2-vsync.md; re/experiments/002-frecuencia-vsync-extra.md",confirmado,2026-11-15
 0x8001645c,frame_end_sync,main,"fin de cuadro: DrawSync, rotación de búferes, VSync y control de ritmo a 30 FPS","0x80016838 se ejecuta una vez por cuadro lógico (60/60)","re/experiments/002-frecuencia-vsync-extra.md",confirmado,2026-11-15
+0x8003be88,rcnt2_tick_isr,main,"rutina de interrupción de RCnt2: incrementa rcnt2_tick_count","se registra con OpenEvent en 0x80015708; hits por cuadro 34/35/34 = delta de 0x8003bea4","re/experiments/003-pausa-vsync-extra-e-isr.md",confirmado,2026-11-15
+0x8006ccf0,frame_counter,main,"contador de cuadros: +1 por cada llamada a frame_end_sync","escrituras: +1 en 0x80016490, reinicio en 0x8002f088; delta 60/60 (002) y 20/20 (003)","re/experiments/002-frecuencia-vsync-extra.md; re/experiments/003-pausa-vsync-extra-e-isr.md",confirmado,2026-11-15
