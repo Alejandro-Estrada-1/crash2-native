@@ -3,6 +3,7 @@
 #
 # Precondición:  <estado de guardado o pantalla exacta en PCSX-Redux>
 #                p. ej. "slot 1: inicio de Turtle Woods, Crash quieto"
+# BIOS:          <BIOS del emulador, p. ej. OpenBIOS (PCSX-Redux build ...)>
 # Módulo:        main | overlay:<id>  (¿está cargado en ese momento?)
 # Hipótesis:     <qué creemos que hace la dirección/función>
 # Éxito:         <qué debe observarse>, p. ej. "el breakpoint salta al girar la cámara
