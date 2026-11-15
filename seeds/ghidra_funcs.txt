@@ -765,3 +765,9 @@
 0x8005B0F8
 0x8005B108
 0x8005B118
+
+# === MECÁNICOS: huecos que reportó el runtime ================================
+# Origen: overlay_captures.json de la primera corrida (2026-11-15, nivel 1).
+# Criterio: página del texto ejecutada en el intérprete, idéntica byte a byte
+# al ejecutable original, y entrada ausente del C generado.
+0x8004075C  # tabla de punteros a funciones en 0x8005B6FC (sus vecinos sí estaban generados); relleno nop antes; 1.a instr. mfc2
