@@ -1,0 +1,45 @@
+# Configuración de Crash Bandicoot 2: Cortex Strikes Back (EUA, SCUS-94154)
+# para psxrecomp. Esquema completo: psxrecomp/docs/config_schema.md.
+#
+# Los valores de [game] salen de la cabecera PS-X EXE de SCUS_941.54 y los de
+# [prepare_disc] de la tabla de Redump (docs/ROADMAP.md). Coinciden con lo que
+# produce psxrecomp/tools/new_project_layout/probe_disc.py sobre el disco.
+
+[game]
+name = "Crash Bandicoot 2: Cortex Strikes Back"
+id = "SCUS-94154"
+players = 1
+# psxrecomp_cli.py generate extrae aquí el ejecutable desde el disco.
+# Nunca dentro de disc/: es un enlace a ../privado/disc, que solo se lee.
+exe = "prepared_disc/SCUS_941.54"
+disc = "disc/Crash Bandicoot 2 - Cortex Strikes Back (USA).cue"
+load_address = "0x80010000"
+entry_pc = "0x80049B2C"
+text_size = "0x0004F800"
+stack_base = "0x801FFFF0"
+
+# Identidad del disco (una sola pista de datos, sin CDDA). generate y
+# verify-disc rechazan una imagen que no coincida.
+[prepare_disc]
+out_dir = "prepared_disc"
+bin_name = "Crash Bandicoot 2 - Cortex Strikes Back (USA).bin"
+cue_name = "Crash Bandicoot 2 - Cortex Strikes Back (USA).cue"
+boot_exe = "SCUS_941.54"
+known_sizes = [192814608]
+known_md5 = ["3c31b5e038f025098a2fdfa70c8213f2"]
+known_sha1 = ["3d37fe4288a83b01f1a0edbf78e76e0fede6bc22"]
+known_crc32 = ["395c0916"]
+
+[recompiler]
+seeds = "seeds/ghidra_funcs.txt"
+out_dir = "generated"
+strict = true
+
+[runtime]
+window_title = "crash2-native"
+memcard_dir = "saves"
+overlay_cache = true
+
+[video]
+renderer = "opengl"
+aspect_ratio = "4:3"
