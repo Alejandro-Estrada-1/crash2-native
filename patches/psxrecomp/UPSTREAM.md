@@ -19,10 +19,11 @@ Entorno: Arch Linux, GCC 16.2.1, Clang 23.1.4, Python 3.14.
   `la inicialización de 'char *' desde 'int' crea un puntero desde un entero`.
 - **Dónde se ve:** la prueba `codegen_host_bios_stems`
   (`runtime/tests/test_codegen_host_bios_stems.py`, compila con `cc -std=c11`).
-- **¿Nos afecta?** Todavía no: el archivo solo se compila con `PSX_RECOMP_UI=ON` y
-  `CODEGEN_SETUP_SOURCES`. La compilación real usa `c_std_11` de CMake, que por defecto
-  es `-std=gnu11` y sí declara las funciones. **Sin comprobar** hasta encender el
-  asistente.
+- **¿Nos afecta?** No. Comprobado el 2026-11-15 con `-fsyntax-only` sobre el archivo:
+  0 errores con `-std=gnu11` en GCC 16 y Clang 23, contra 12 y 20 con `-std=c11`.
+  Nuestra compilación no pasa ningún `-std=` (`build-release/build.ninja`), así que usa
+  el dialecto GNU por defecto del compilador. Solo falla la prueba upstream, que fuerza
+  `-std=c11`. No hace falta parche local.
 - **Arreglo propuesto:** `#define _DEFAULT_SOURCE` (o `_XOPEN_SOURCE 700`) antes de
   los `#include` del archivo. Genérico, candidato a upstream.
 
@@ -62,7 +63,23 @@ Entorno: Arch Linux, GCC 16.2.1, Clang 23.1.4, Python 3.14.
   autocompilación esté mal configurada.
 - **Para el reporte:** distinguir "fallo parcial" de "no se compiló nada" en el aviso.
 
-## 4. `ctest` del recompilador: 15 de 164 pruebas fallan en `b263b855`
+## 4. El asistente no pasa `--no-toolchain-download` (solo afecta a Windows)
+
+- **Dónde:** `host/psxrecomp_codegen_host.c` llama a `psxrecomp_cli.py generate` y
+  `rebuild` sin `--no-toolchain-download`.
+- **En Linux y macOS no descarga nada:** `ensure_toolchain()` en
+  `tools/toolchain_pack.py` usa `cmake`, `ninja`, `python3` y el compilador del PATH, y
+  si falta alguno lanza "Native build tools are missing". Comprobado con una prueba que
+  bloquea `urllib` (se había planeado un parche `PSXRECOMP_NO_TOOLCHAIN_DOWNLOAD` y se
+  descartó: no tendría efecto en Linux).
+- **En Windows** sí descarga el paquete `releases/latest` de
+  `RetroPortingToolKit/RetroPorting-Toolchains`, sin versión fija ni hash.
+- **Para el reporte (si algún día hay build de Windows):** fijar la versión del paquete
+  y verificar su SHA-256, o permitir que el título desactive la descarga.
+- **Consecuencia para nuestra Fase 4:** el AppImage tiene que traer (o pedir) cmake,
+  ninja, python3 y un compilador; el asistente no los consigue solo.
+
+## 5. `ctest` del recompilador: 15 de 164 pruebas fallan en `b263b855`
 
 Compilado fuera del árbol (`build-recompiler/`). Casi todas parecen pruebas
 desfasadas del código, no fallos del entorno:
