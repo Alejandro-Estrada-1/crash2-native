@@ -98,3 +98,28 @@ desfasadas del código, no fallos del entorno:
 
 Antes de reportar: repetir en el pin de Hércules (`2a4824f`) para ver cuáles son
 regresiones recientes. `docs/BUILDING.md` todavía dice "38 tests".
+
+## 6. Rangos `install_slots` de BIOS de Sony medidos solo con PsyQ 3.70
+
+- **Dónde:** `bios/SCPH1001.toml` (y `SCPH5500.toml` / `SCPH5501.toml`) declaran el
+  rango del pad `ram_addr = 0x4964`, `len = 0x2C` ("RemovePatchPad / ChgclrPAD
+  family"), medido con Breath of Fire III (SLPS-00990, PsyQ 3.70). Los propios
+  perfiles dicen "Re-measure per SDK version before trusting the numbers".
+- **Qué falta:** según el agente de ingeniería inversa, el `_patch_pad` de PsyQ 4.0
+  (el que usa Crash 2) parchea además `base+0x3D8`, `+0x4E0` y `+0x62C`. **Sin
+  verificar:** no tenemos BIOS de Sony, y no está comprobado respecto a qué base se
+  miden.
+- **Efecto esperado si faltan:** esos cuerpos del kernel no pasan la comparación con
+  la ROM y se interpretan siempre ("Undeclared means that body keeps interpreting"):
+  más lento, no incorrecto.
+- **No afecta a OpenBIOS:** OpenBIOS desactiva esos parches en el código del juego.
+  `getB0table` (`0xBFC05BB0`) llama a `patch_hook(a0 = $ra del llamador)`
+  (`0xBFC07E84`), que escribe `nop; nop` en `$ra` y el `*_execute` correspondiente
+  pone `b +N; nop` en `$ra+8`. En Crash 2 esto explica las tres funciones del juego
+  reescritas en RAM (`_patch_pad` 0x8004A2EC → `patch_pad_2_execute`, `b +10`;
+  `_send_pad` 0x8004A38C → `send_pad_2_execute`, `b +12`; `_remove_ChgclrPAD`
+  0x8004A424 → `remove_ChgclrPAD_2_execute`, `b +5`). Evidencia: desensamblado de
+  los comentarios de `generated/OpenBIOS_full.c` y símbolos ELF de
+  `recompiler/seeds/openbios_elf_seeds.json` (pcsx-redux `55fbf04`).
+- **Para el reporte:** pedir que se midan los rangos con PsyQ 4.0 o que se declare la
+  unión de versiones, como permite el esquema.
