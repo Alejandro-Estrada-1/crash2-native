@@ -207,9 +207,16 @@ Registro vivo del análisis estático y dinámico de *Crash Bandicoot 2: Cortex 
       - `send_pad_2_execute` (`0xBFC082DC`): parchea el puntero de `_SendPAD` (`DAT_8005f338`, `0x000040b0` observado en `OpenBIOS_full.c`) y reescribe desde `$ra = 0x8004a3a8` con `nop; nop; b +12; nop` (`0x1000000c`, saltando a `0x8004a3e4`, después de `FlushCache`).
       - `remove_ChgclrPAD_2_execute` (`0xBFC08254`): reescribe desde `$ra = 0x8004a440` con `nop; nop; b +5; nop` (`0x10000005`, saltando a `0x8004a460`, después de `FlushCache`).
     - Nota sobre `SCPH1001.toml` / BIOS retail vs. OpenBIOS: en un BIOS retail no existe este hook sobre el llamador (por eso `SCUS_941.54` trae los parches hacia `*(B0Table + 0x16c)`), mientras que en OpenBIOS (tanto `psxrecomp` como PCSX-Redux) sí se reescribe la página `0x8004A000` en RAM. A partir de aquí, todo experimento en `re/experiments/` registra explícitamente la BIOS usada.
-- **Experimento preparado (pendiente de corrida con PCSX-Redux):** [004-codigo-modificado-8004a3xx.gdb](re/experiments/004-codigo-modificado-8004a3xx.gdb) (solo lectura, anotando BIOS OpenBIOS).
-  - Verifica en la RAM viva de PCSX-Redux las 3 ventanas reescritas (`0x8004a308`, `0x8004a3a8`, `0x8004a440`) y los punteros resultantes en `DAT_8005f32c`/`30`/`38`.
-- **Estado:** hipótesis corregida (el modificador de `0x8004A3xx` es OpenBIOS `getB0table`/`patch_hook`, no código del juego); pendiente confirmar en PCSX-Redux con `004`.
+- **Experimento ejecutado (PCSX-Redux + OpenBIOS):** [004-codigo-modificado-8004a3xx.gdb](re/experiments/004-codigo-modificado-8004a3xx.gdb) ([resumen](re/experiments/004-codigo-modificado-8004a3xx.md)) — solo lectura, `exit 0`, `[Inferior 1 (process 1) detached]`.
+  - **Observado en RAM viva (`0x8004a2ec..0x8004a47f`, 101 palabras):**
+    - `0x8004a308` (`_patch_pad`): `00000000 00000000 1000000a 00000000` (`nop; nop; b +10; nop`, exactamente lo esperado; EXE original `8c42016c...`).
+    - `0x8004a3a8` (`_send_pad`): `00000000 00000000 1000000c 00000000` (`nop; nop; b +12; nop`).
+    - `0x8004a440` (`_remove_ChgclrPAD`): `00000000 00000000 10000005 00000000` (`nop; nop; b +5; nop`).
+    - Las otras 89 palabras del bloque coinciden palabra por palabra con `SCUS_941.54`.
+  - **Punteros poblados en `0x8005f324..0x8005f344`:**
+    - `DAT_8005f32c` (`EnablePAD`) = `0xbfc088f4`, `DAT_8005f330` (`DisablePAD`) = `0xbfc08904`, `DAT_8005f338` (`_SendPAD`) = `0x00003f88`.
+    - Retornos de `InitPAD` guardados: `DAT_8005f324 = 0x8004a03c`, `DAT_8005f334 = 0x8004a070`, `DAT_8005f344 = 0x8004a02c`.
+- **Resultado:** `confirmado` dinámicamente que **OpenBIOS** (`getB0table` → `patch_hook`) es el autor de las reescrituras en `0x8004a308/a3a8/a440`, descartando que el juego (`SCUS_941.54`) modifique su propio código en `0x8004A3xx`. Listo para revisión humana de los símbolos de `libapi` propuestos si se desean promover a `re/symbols.csv`.
 
 ---
 
