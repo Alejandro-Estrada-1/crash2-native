@@ -229,6 +229,11 @@ Registro vivo del análisis estático y dinámico de *Crash Bandicoot 2: Cortex 
 | `DAT_8005f338` (`_SendPAD`) | `0x00003f88` | `0x000040b0` |
 
 - **Hipótesis:** PCSX-Redux incluye una versión/compilación distinta de OpenBIOS que la fijada por `psxrecomp` (`55fbf04`); el mecanismo `getB0table` → `patch_hook` es equivalente, pero cambian los desplazamientos internos de la ROM/kernel.
+- **Resultado (`confirmado` por hashes SHA-256 de 512 KiB):**
+  - PCSX-Redux Build `561` (`resources/openbios.bin`): `8a8925807952965c4a116239a21903476c5c585387a1d4778a90b9b9c01804ee`
+  - `psxrecomp` (`build-release/bios/openbios.bin`, OpenBIOS `55fbf04`): `fabe498fbf224e4721f12f31b6f5fe0659205e341dc4e5c5f91b9bd1a1011c57`
+  - Los hashes son distintos: queda confirmado que son versiones diferentes de OpenBIOS, lo que explica la discrepancia de punteros observada en `004`.
+  - **Regla operativa de comparación:** para comparar emulador y port de forma exacta (p. ej. direcciones dentro de ROM/kernel o parches de BIOS), PCSX-Redux debe configurarse para cargar la misma ROM de OpenBIOS que `psxrecomp` (`sha256: fabe498fbf224e4721f12f31b6f5fe0659205e341dc4e5c5f91b9bd1a1011c57`).
 - **Propuesta de registro exacto de la BIOS por experimento (sin versionar binarios):**
   - Leer la ROM mapeada en `0xbfc00000..0xbfc80000` (512 KiB) de forma temporal y de solo lectura —por ejemplo, en GDB `dump binary memory /tmp/psx_bios.bin 0xbfc00000 0xbfc80000`, calcular `sha256sum /tmp/psx_bios.bin` (o `crc32`) y borrar `/tmp/psx_bios.bin` de inmediato, o calcular el hash desde consola Lua en PCSX-Redux— y anotar en `# BIOS:` del `.gdb` (ver [000-plantilla.gdb](re/experiments/000-plantilla.gdb)) y en el resumen `.md` el nombre de la BIOS, la build del emulador y ese hash (además de cualquier cadena de versión/build presente en la ROM si aplica).
 
