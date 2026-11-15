@@ -18,8 +18,8 @@ Registro vivo del análisis estático y dinámico de *Crash Bandicoot 2: Cortex 
 | `ghidra_psx_ldr` | Cargado en proyecto | Release `2026.11.08` (PSX loader, PsyQ `4.0` detectado) |
 | JVM del sistema | Configurada por entorno | Por defecto `java-21-openjdk` (sin cambiar); `JAVA_HOME=/usr/lib/jvm/java-27-openjdk` solo para REA |
 | MCP de Ghidra | Activo (`pyghidra-mcp==0.3.0`) | Headless sobre copia `../privado/ghidra-ro/crash2.gpr` (`JAVA_HOME=/usr/lib/jvm/java-27-openjdk`); `PSX:LE:32:default (1.5)` verificado |
-| PCSX-Redux | Pendiente de instalación/config. | No detectado en `PATH`; activar Debugger + GDB Server (puerto por defecto `3333`) y desactivar Dynarec |
-| `gdb` + `scripts/gdb-psx` | Verificado localmente | `GNU gdb (GDB) 18.1` con soporte `mips:3000`; `scripts/gdb-psx` listo (requiere `PSX_GDB_PORT`) |
+| PCSX-Redux | Listo y validado | Build `561`, commit `61e3086f` (2026-11-14); CPU en intérprete, depurador activo, servidor GDB en puerto `3333` |
+| `gdb` + `scripts/gdb-psx` | Verificado contra emulador | `GNU gdb (GDB) 18.1` (`mips:3000`); experimentos `001` y `002` ejecutados limpiamente (`exit 0`, `detach` correcto) |
 
 ---
 
@@ -28,8 +28,8 @@ Registro vivo del análisis estático y dinámico de *Crash Bandicoot 2: Cortex 
 - [x] Crear proyecto de Ghidra (`../privado/ghidra/crash2`) con `ghidra_psx_ldr` (PsyQ 4.0 detectado).
 - [x] Instalar y configurar MCP de Ghidra (`pyghidra-mcp==0.3.0`, `tools/ghidra/sync-ro.sh`, `../privado/ghidra-ro/crash2.gpr`) y verificar lectura de `SCUS_941.54` con lenguaje `PSX:LE:32:default (1.5)`.
 - [x] Primera tarea estática con el MCP: localizar quién escribe en `DAT_8003bea4` y qué función se registra con `VSyncCallback`; propuestas registradas en `re/provisional_symbols.csv`.
-- [ ] Verificar dinámicamente en PCSX-Redux `FUN_8001645c` / `rcnt2_tick_isr` (`0x8003be88`) / `rcnt2_tick_count` (`0x8003bea4`).
-- [ ] Instalar y configurar PCSX-Redux (Debugger + GDB Server sin Dynarec) y validar conexión con `scripts/gdb-psx`.
+- [x] Verificar dinámicamente en PCSX-Redux el ritmo de `DAT_8003bea4` (~34.5 ticks/cuadro = ~17.25 ticks/VSync) y `0x80016838` (30 Hz) (`001` y `002`); queda pendiente observar disparo de `0x80016868` en escena ligera/pausa.
+- [x] Instalar y configurar PCSX-Redux (Build `561`, commit `61e3086f`, intérprete + GDB puerto `3333`) y validar conexión con `scripts/gdb-psx`.
 - [ ] Localizar funciones PsyQ base (`SetGeomScreen`, `DrawOTag`, `VSync`, `CdRead`) y mapear XREFs.
 - [ ] Identificar sistema de carga de overlays (`CdRead` / tabla de módulos).
 - [ ] Localizar bucle principal (30 Hz), actualización de cámara, parámetros de proyección/recorte y lista de entidades.
@@ -130,9 +130,26 @@ Registro vivo del análisis estático y dinámico de *Crash Bandicoot 2: Cortex 
       - Único XREF en el binario: `FUN_8001645c` en `0x80016974` (`jal 0x80016f04`), pasándole `a0 = *(int *)(DAT_80063454 + 0xc) - *(int *)(DAT_80063450 + 0xc)` (`0x80016978 _subu a0,v0,a0`) y almacenando su retorno en `*(DAT_80063450 + 0x14)` (`0x80016988 sw v0,0x14(v1)`).
       - Desensamblado/pseudocódigo verificado: si `param_1 < 0` devuelve `0x22`; si `< 0x13` devuelve `0x11`; si `< 0x24` devuelve `0x22`; si `< 0x35` devuelve `0x33`; si `>= 0x35` devuelve `param_1` sin cuantizar (múltiplos de `0x11` = 17 ticks). Queda pendiente revisar qué funciones leen el campo `+0x14` de la estructura de `DAT_80063450`.
     - **Nota sobre nombres provisionales (`sys_init` y `main_loop`):** `FUN_80015614` (`sys_init`) y `FUN_80011800` (`main_loop`) se mantienen en `re/provisional_symbols.csv` como `propuesto` con etiqueta de nombre provisional; todavía falta verificar sus llamadores y alcance completo antes de fijar esos nombres.
-- **Experimento:** Preparados sin ejecutar [001-ticks-rcnt2-vsync.gdb](re/experiments/001-ticks-rcnt2-vsync.gdb) y [002-frecuencia-vsync-extra.gdb](re/experiments/002-frecuencia-vsync-extra.gdb) (pendiente de instalar/configurar PCSX-Redux).
-- **Resultado:** `propuesto` (análisis estático completado; propuestas registradas en `re/provisional_symbols.csv`).
-- **Siguiente paso:** Ejecutar `001-ticks-rcnt2-vsync.gdb` y `002-frecuencia-vsync-extra.gdb` en PCSX-Redux para comprobar el supuesto `/8` (~17 ticks por VSync), la frecuencia de `0x80016838` y cuántas veces salta `0x80016868` en juego real.
+- **Experimento:** Preparados sin ejecutar [001-ticks-rcnt2-vsync.gdb](re/experiments/001-ticks-rcnt2-vsync.gdb) y [002-frecuencia-vsync-extra.gdb](re/experiments/002-frecuencia-vsync-extra.gdb) (ver resultados dinámicos abajo).
+- **Resultado:** `propuesto` (análisis estático completado; verificación dinámica registrada en la entrada siguiente).
+- **Siguiente paso:** Promoción humana en `re/symbols.csv` cuando corresponda y probar `0x80016868` en una escena ligera o pausa.
+
+### 2026-11-15 — Experimentos 001 y 002 en PCSX-Redux (tasa de `DAT_8003bea4` y frecuencia de `0x80016838` / `0x80016868`)
+
+- **Módulo:** `main` (`0x80016838`, `0x80016840`, `0x80016868`, `0x80016870`, `0x8003bea4`, `0x8006ccf0`)
+- **Precondición:** PCSX-Redux Build `561` (`61e3086f`, 2026-11-14), CPU en intérprete, depurador activo, GDB en `localhost:3333`; slot 1 cargado dentro del primer nivel con Crash quieto.
+- **Hipótesis:**
+  1. Bajo el supuesto `SysClk/8` en `RCntCNT2`, `DAT_8003bea4` avanza ~17 ticks por VSync (~34.4 por cuadro de 30 Hz).
+  2. `FUN_8001645c` ejecuta `VSync(0)` en `0x80016838` una vez por cuadro (~30 Hz) y llama al `VSync(0)` extra en `0x80016868` cuando `delta < 0x19`.
+- **Experimentos:** [001-ticks-rcnt2-vsync.gdb](re/experiments/001-ticks-rcnt2-vsync.gdb) ([resumen](re/experiments/001-ticks-rcnt2-vsync.md)) y [002-frecuencia-vsync-extra.gdb](re/experiments/002-frecuencia-vsync-extra.gdb) ([resumen](re/experiments/002-frecuencia-vsync-extra.md)).
+- **Resultados observados (ambos terminaron con `exit 0` y `detach` limpio):**
+  - **Experimento 001 (12 cuadros en `0x80016840`):** `DAT_8003bea4` pasó de `0x0002459a` (`148890`) a `0x00024738` (`149304`), con `delta_frame` alternando estrictamente entre `34` y `35` ticks (`35, 34, 35, 34, 34, 35, 34, 35, 34, 35, 34, 35`; promedio **`414 / 12 = 34.50` ticks/cuadro**). El breakpoint `0x80016868` no saltó ninguna vez en esos 12 cuadros.
+  - **Experimento 002 (60 cuadros entre paso 1 y paso 61 de `0x80016838`):**
+    - `cuadros medidos (0x80016838) = 60`, `delta DAT_8006ccf0 = 60` (exactamente 1 llamada a `0x80016838` por cuadro de `FUN_8001645c`).
+    - `delta DAT_8003bea4 = 2071` ticks (`2071 / 60 = 34.52` ticks/cuadro; división entera GDB = `34`).
+    - `disparos 0x80016868 (VSync extra) = 0`.
+- **Resultado:** `confirmado` parcialmente (`DAT_8003bea4` avanza a `34.5` ticks por cuadro de 30 Hz = **`~17.25` ticks por VSync**, validando el supuesto `SysClk/8` / `~1033.6 Hz` y el ritmo 30 Hz de `0x80016838`; en el primer nivel con Crash quieto cada cuadro tarda > 1 VSync en completarse antes de `0x80016838`, por lo que `delta >= 0x19` al volver de `0x80016838` y `0x80016868` dio `0` disparos, quedando pendiente verificar un escenario ligero como pausa o mapa para observar `0x80016868` activo y medir 1 VSync directo).
+- **Siguiente paso:** Repetir `001`/`002` en pantalla de mapa o menú de pausa si se quiere observar disparos de `0x80016868` (>0) y la delta directa de 1 VSync (~17 ticks) entre `0x80016840` y `0x80016870`.
 
 ---
 
