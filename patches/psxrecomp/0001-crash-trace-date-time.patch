@@ -1,0 +1,26 @@
+diff --git a/runtime/src/crash_trace.c b/runtime/src/crash_trace.c
+index 96d52cd8..3a6880e8 100644
+--- a/runtime/src/crash_trace.c
++++ b/runtime/src/crash_trace.c
+@@ -52,6 +52,11 @@ static const char *kReportPath = "psx_last_run_report.json";
+  * correlated to an exact build (issue #1 reports had no version field). The git
+  * rev comes from runtime.cmake (PSX_BUILD_REV); __DATE__/__TIME__ are a always-
+  * available fallback that still distinguishes builds. */
++/* zig cc turns -Wdate-time on __DATE__/__TIME__ into an error by default. */
++#if defined(__clang__) || defined(__GNUC__)
++#pragma GCC diagnostic push
++#pragma GCC diagnostic ignored "-Wdate-time"
++#endif
+ #ifndef PSX_BUILD_REV
+ #define PSX_BUILD_REV "unknown"
+ #endif
+@@ -60,6 +65,9 @@ static const char *kBuildId = PSX_BUILD_REV " (" __DATE__ " " __TIME__ ") implem
+ #else
+ static const char *kBuildId = PSX_BUILD_REV " (" __DATE__ " " __TIME__ ")";
+ #endif
++#if defined(__clang__) || defined(__GNUC__)
++#pragma GCC diagnostic pop
++#endif
+ 
+ /* CPU state pointer (set by debug server at init). */
+ extern CPUState *debug_cpu_ptr;

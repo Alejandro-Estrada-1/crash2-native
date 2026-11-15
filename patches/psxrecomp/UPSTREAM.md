@@ -1,8 +1,8 @@
 # Candidatos a reportar o parchear en psxrecomp (upstream)
 
 Problemas del framework observados en este port. Cada entrada dice qué se vio,
-dónde y con qué evidencia. Ninguno tiene parche todavía: cuando lo tenga, el
-`.patch` va en este directorio y se enlaza aquí.
+dónde y con qué evidencia. Cuando un problema lleva parche local, el `.patch`
+va en este directorio (lo aplica `scripts/setup.sh`) y se enlaza aquí.
 
 Framework: `psxrecomp` en `b263b855` (master del 2026-11-10).
 Entorno: Arch Linux, GCC 16.2.1, Clang 23.1.4, Python 3.14.
@@ -123,3 +123,46 @@ regresiones recientes. `docs/BUILDING.md` todavía dice "38 tests".
   `recompiler/seeds/openbios_elf_seeds.json` (pcsx-redux `55fbf04`).
 - **Para el reporte:** pedir que se midan los rangos con PsyQ 4.0 o que se declare la
   unión de versiones, como permite el esquema.
+
+## 7. Compilación con `zig cc -target x86_64-linux-gnu.2.28` (validación para AppImage)
+
+Probado el 2026-11-15 con Zig `0.17.1` (Clang `22.1.8`) sobre el runtime de
+`psxrecomp` (`b263b855`), `recomp-ui` (`3c641560`), `src/`, los 29 archivos en
+`generated/` (`SCUS_941.54_dispatch.c` y `SCUS_941.54_full_00..27.c`) y los
+emisores en `psxrecomp/recompiler`.
+
+- **Resultado general:** sí compilan y enlazan el runtime completo (`crash2_native`,
+  139 MiB), la variante `--setup-host` (`-DPSXRECOMP_FORCE_SETUP_HOST=ON`) y los
+  emisores (`psxrecomp-game` y `psxrecomp-bios`, probados con
+  `-DPSXRECOMP_ENABLE_CHD=OFF`). `libc++` queda enlazado estáticamente y la versión
+  máxima de símbolo en `readelf -V` fue `GLIBC_2.27` en `crash2_native` (`GLIBC_2.16`
+  en `psxrecomp-game`).
+- **Fallo de compilación — `runtime/src/crash_trace.c` (`-Werror,-Wdate-time`):**
+  las líneas 59 y 61 usan `__DATE__` y `__TIME__`. Zig 0.17.1 activa `-Werror=date-time`
+  por defecto y aborta la compilación (`expansion of date or time macro is not reproducible`).
+  - **Parche local (candidato a upstream):** [`0001-crash-trace-date-time.patch`](0001-crash-trace-date-time.patch),
+    que envuelve `kBuildId` con `#pragma GCC diagnostic push / ignored "-Wdate-time" / pop`
+    bajo `#if defined(__clang__) || defined(__GNUC__)`. Verificado con `zig cc` (0.17.1),
+    `clang -Wdate-time -Werror` y `gcc -std=gnu11 -Wdate-time -Werror`.
+- **Fallo de configuración CMake cuando el host tiene SDL3 — `runtime/runtime.cmake:265-284`:**
+  si el sistema anfitrión tiene `/usr/lib/cmake/SDL3` (Arch Linux, etc.),
+  `find_package(SDL3)` lo detecta y `_psx_header_compiles("SDL3/SDL.h")` falla porque
+  `zig cc` usa su propio sysroot en lugar de `/usr/include` y CMake omite `-I/usr/include`.
+  En lugar de recurrir a `PSX_SDL3_FETCH=ON`, `runtime.cmake:271` aborta con `FATAL_ERROR`.
+  - **Sin parche en `runtime.cmake` (intencional para `cmake-clang-v1`):** al invocar
+    CMake con `zig cc`, pasar `-DCMAKE_DISABLE_FIND_PACKAGE_SDL3=ON` fuerza el fallback a
+    `FetchContent` (`SDL3 3.4.10` estático).
+- **Dependencias del anfitrión enlazadas si no se desactivan (`ldd` / `readelf -d`):**
+  en el build completo en Arch, CMake enlazó `libcrypto.so.4` (`OpenSSL`),
+  `libfreetype.so.6` (`Freetype`) y `libharfbuzz.so.0` (`PkgConfig` + `harfbuzz`), lo
+  que rompería portabilidad entre distros (p. ej. Ubuntu 22.04 usa `libcrypto.so.3`).
+  Probado `--setup-host` con `-DCMAKE_DISABLE_FIND_PACKAGE_SDL3=ON`,
+  `-DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON`, `-DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON` y
+  `-DCMAKE_DISABLE_FIND_PACKAGE_PkgConfig=ON`: `psx_sha256_file.cpp` usa la ruta
+  portable sin `libcrypto`, `zlib` compila estático vía `FetchContent`, y solo quedan
+  `NEEDED` `libfreetype.so.6` (opcional en `recomp-ui`; también desactivable),
+  `libOpenGL.so.0`, `libm.so.6`, `libc.so.6`, `ld-linux-x86-64.so.2`, `libpthread.so.0`
+  y `libdl.so.2`. Sin `PkgConfig`, SDL3 desactiva Wayland/Pulse/PipeWire y mantiene
+  `x11(dynamic)` + `alsa(dynamic)`. `FindOpenGL` sigue requiriendo biblioteca y
+  cabecera GL del sistema (`libglvnd` / `libgl-dev`) salvo que el entorno empaquetado
+  aporte cabeceras GL.
