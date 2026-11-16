@@ -23,6 +23,9 @@ disc.cfg
 rom.cfg
 settings.toml
 
+# Local agent permissions (absolute home paths): never published
+.claude/settings.local.json
+
 # Runtime artifacts written when launched from repo root
 overlay_captures.json
 psx_crash.txt
