@@ -92,14 +92,22 @@ para usuarios finales debe conservar dicho directorio `licenses/` y `OpenBIOS.LI
   - `TinyCC` (subproceso externo opcional para overlays): LGPL-2.1 (`TinyCC-LICENSE.txt`).
 
 
-6. Compilador portable y herramientas para AppImage
----------------------------------------------------
-Cuando un release en formato **AppImage** incluya el compilador **Zig** para
-generar y compilar el binario nativo en la máquina de la persona usuaria:
-- **Zig** se distribuye bajo licencia **MIT** (junto con los avisos propios de su
-  paquete oficial y biblioteca estándar/LLVM integrados en dicha distribución).
-- Cualquier ejecutable del juego producido al compilar contra `psxrecomp` sigue
-  regido por la **PolyForm Noncommercial License 1.0.0**.
-- Si el AppImage incluye además herramientas de compilación portables (como
-  CMake o Ninja) o bibliotecas compartidas del sistema en `usr/lib`, sus avisos y
-  licencias se conservarán dentro del propio paquete junto a `NOTICE` y `licenses/`.
+6. Compilador portable y herramientas incluidas en el AppImage
+-----------------------------------------------------------------
+Los releases en formato **AppImage** empaquetan las herramientas portables
+necesarias para generar y compilar el binario del juego (y sus overlays MIPS en
+tiempo de ejecución) localmente en la máquina de la persona usuaria:
+- **Zig (`0.17.1`)**: licencia **MIT** (junto con los avisos propios de su
+  paquete oficial, biblioteca estándar y componentes LLVM/musl/glibc integrados
+  en `zig/LICENSE` y `zig/lib/`).
+- **CMake (`3.31.6`)**: licencia **BSD-3-Clause**, Copyright 2000-2024 Kitware,
+  Inc. y colaboradores.
+- **Ninja (`1.12.1`)**: **Apache License 2.0**.
+- **tomli (`2.2.1`)**: licencia **MIT**, Copyright (c) 2021 Taneli Hukkinen
+  (respaldo puro en Python para parseo TOML en Python 3.10).
+- Cualquier ejecutable u overlay compilado contra `psxrecomp` sigue regido por
+  la **PolyForm Noncommercial License 1.0.0**.
+- El AppImage **no redistribuye** bibliotecas de drivers gráficos ni de ventana
+  (`libGL`, `libOpenGL`, `libGLX`, `libdrm`): el binario enlaza con las
+  bibliotecas nativas del sistema anfitrión. Todos los avisos se conservan dentro
+  del propio paquete en `licenses/` junto con `NOTICE`.

@@ -14,6 +14,29 @@ endif()
 
 project(Crash2Native LANGUAGES C CXX)
 
+# Modo AppImage: activado solo cuando AppRun o release.yml exportan
+# CRASH2NATIVE_APPIMAGE_TOOLCHAIN=1. Evita depender de opcionales del sistema
+# (OpenSSL/Freetype/HarfBuzz/ZLIB/SDL3), fuerza descargas offline desde
+# psxrecomp/third_party/ y añade rutas multiarch para find_library(GL/X11/ALSA)
+# con zig cc. No altera scripts/build_linux.sh ni builds locales normales.
+if(DEFINED ENV{CRASH2NATIVE_APPIMAGE_TOOLCHAIN}
+   AND NOT "$ENV{CRASH2NATIVE_APPIMAGE_TOOLCHAIN}" STREQUAL ""
+   AND NOT "$ENV{CRASH2NATIVE_APPIMAGE_TOOLCHAIN}" STREQUAL "0")
+    set(PSX_DEPS_OFFLINE ON CACHE BOOL
+        "Usar archivos vendorizados en psxrecomp/third_party/" FORCE)
+    foreach(_crash2_pkg SDL3 ZLIB OpenSSL Freetype PkgConfig)
+        set(CMAKE_DISABLE_FIND_PACKAGE_${_crash2_pkg} ON CACHE BOOL
+            "Desactivado en modo AppImage para portabilidad" FORCE)
+    endforeach()
+    unset(_crash2_pkg)
+    list(APPEND CMAKE_LIBRARY_PATH
+        "/usr/lib/x86_64-linux-gnu"
+        "/lib/x86_64-linux-gnu"
+        "/usr/lib64"
+        "/usr/lib")
+    list(REMOVE_DUPLICATES CMAKE_LIBRARY_PATH)
+endif()
+
 # --- Superficies opcionales del framework ----------------------------------
 # Valores por defecto de este proyecto; se pueden cambiar con -D al configurar
 # (sin FORCE, para que la línea de comandos mande). Ojo: un build ya
