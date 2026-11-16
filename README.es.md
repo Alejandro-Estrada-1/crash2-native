@@ -14,6 +14,9 @@ Port nativo para Linux de *Crash Bandicoot 2: Cortex Strikes Back* (PS1, EUA, `S
 > [!WARNING]
 > **En desarrollo activo y uso estrictamente no comercial.** Las fases 0 a 4 (base de compilación, ingeniería inversa *clean-room* de tiempo/cámara/entidades, `verify-disc`, CI y empaquetado AppImage) están completas en local; siguen pantalla ancha (Fase 5), interpolación de FPS altos (Fase 6) y pruebas de regresión deterministas (Fase 7). Todo binario enlazado con `psxrecomp` queda regido por **PolyForm Noncommercial License 1.0.0**.
 
+> [!NOTE]
+> **Hecho con apoyo de IA y verificado por una persona.** El código del port, la infraestructura y las notas de ingeniería inversa se producen con agentes de IA bajo revisión humana, siguiendo las reglas *clean-room* de [`AGENTS.es.md`](AGENTS.es.md). Nada se publica solo porque un agente lo afirme: únicamente el responsable promueve un símbolo, y solo tras confirmarlo en el emulador. Ver [Desarrollo asistido por IA](#desarrollo-asistido-por-ia).
+
 ---
 
 ## Objetivos y diseño técnico
@@ -132,6 +135,20 @@ Si `--check-prereqs` indica paquetes faltantes, instálalos según tu distribuci
 | `packaging/appimage/` | Empaquetado AppImage, `AppRun`, archivo `.desktop` y hallazgos en Ubuntu 22.04 | [CHECK_FINDINGS.es.md](packaging/appimage/CHECK_FINDINGS.es.md) |
 | `scripts/` | Scripts de entorno, compilación en Linux, wrapper GDB para PCSX-Redux y respaldo de partidas | — |
 | `docs/` | Decisiones de arquitectura, referencia Redump y hoja de ruta | [ROADMAP.es.md](docs/ROADMAP.es.md) |
+| `AGENTS.md`, `CLAUDE.md`, `GEMINI.md` | Reglas de trabajo para personas y agentes de IA: política *clean-room*, alcance por rol y ciclo obligatorio de verificación | [AGENTS.es.md](AGENTS.es.md) |
+
+---
+
+## Desarrollo asistido por IA
+
+Este proyecto lo desarrolla un responsable humano trabajando con agentes de IA. Se dice abiertamente a propósito: es parte del método, no algo que ocultar.
+
+- **Infraestructura** (scripts de compilación, CI, empaquetado, herramientas en Rust y el código del port en `src/`): la escribe un agente de IA bajo revisión humana en un worktree dedicado.
+- **Ingeniería inversa:** también asistida por agentes, pero con una regla *clean-room* estricta. Cada dirección, estructura y constante publicada en `re/` se observó en `SCUS-94154` con Ghidra y después se confirmó dinámicamente en PCSX-Redux con un experimento reproducible que declara precondiciones y criterios de éxito y fallo. Las propuestas se quedan en [`re/provisional_symbols.csv`](re/provisional_symbols.csv); solo el humano las promueve a [`re/symbols.csv`](re/symbols.csv).
+- **Nada de datos del juego generados por IA.** Los modelos nunca reciben el disco, el ejecutable, volcados de BIOS ni tarjetas de memoria, y nada derivado de ellos se versiona.
+- **Las reglas son públicas.** [`AGENTS.es.md`](AGENTS.es.md), [`CLAUDE.es.md`](CLAUDE.es.md) y [`GEMINI.es.md`](GEMINI.es.md) documentan roles, acciones prohibidas y ciclo de verificación, de modo que cualquier hallazgo se puede auditar o reproducir. Son documentación de proceso: puedes ignorarlas si solo te interesa el port.
+
+Los agentes son herramientas. Cada dato publicado lo comprueba el responsable contra el juego, y cualquier error que quede es responsabilidad suya.
 
 ---
 

@@ -14,6 +14,9 @@ Native Linux port of *Crash Bandicoot 2: Cortex Strikes Back* (PS1, USA, `SCUS-9
 > [!WARNING]
 > **Active development & noncommercial restriction.** Phases 0 through 4 (base compilation, clean-room reverse engineering of timing/camera/entities, `verify-disc`, CI, and AppImage packaging) are complete locally; widescreen (Phase 5), high-FPS interpolation (Phase 6), and deterministic regression tests (Phase 7) are next. Any binary linked against `psxrecomp` is subject to the **PolyForm Noncommercial License 1.0.0**.
 
+> [!NOTE]
+> **Built with AI assistance, verified by a human.** Port code, infrastructure, and reverse-engineering notes are produced with AI coding agents under human review, following the clean-room rules in [`AGENTS.md`](AGENTS.md). Nothing is published on an agent's word alone: only the maintainer promotes a symbol, and only after it has been confirmed in the emulator. See [AI-Assisted Development](#ai-assisted-development).
+
 ---
 
 ## Project Goals & Technical Design
@@ -132,6 +135,20 @@ If `--check-prereqs` reports missing packages, install them for your distributio
 | `packaging/appimage/` | Portable AppImage builder, `AppRun`, desktop entry, and Ubuntu 22.04 check findings | [CHECK_FINDINGS.md](packaging/appimage/CHECK_FINDINGS.md) |
 | `scripts/` | Setup, Linux build, PCSX-Redux GDB wrapper, and save backup utilities | — |
 | `docs/` | Architecture decisions, Redump reference, and roadmap | [ROADMAP.md](docs/ROADMAP.md) |
+| `AGENTS.md`, `CLAUDE.md`, `GEMINI.md` | Working rules for humans and AI agents: clean-room policy, per-role scope, and the mandatory verification cycle | [AGENTS.md](AGENTS.md) |
+
+---
+
+## AI-Assisted Development
+
+This project is developed by a human maintainer working with AI coding agents. That is stated plainly on purpose: it is part of the method, not something to hide.
+
+- **Infrastructure** (build scripts, CI, packaging, Rust tools, and port code in `src/`) is written by an AI agent under human review in a dedicated worktree.
+- **Reverse engineering** is also agent-assisted, but under a strict clean-room rule. Every address, structure, and constant published in `re/` was observed on `SCUS-94154` in Ghidra and then confirmed dynamically in PCSX-Redux with a reproducible experiment that declares its preconditions and pass/fail criteria. Proposals stay in [`re/provisional_symbols.csv`](re/provisional_symbols.csv); only the human promotes them to [`re/symbols.csv`](re/symbols.csv).
+- **No AI-generated game data.** Models never receive the disc, the executable, BIOS dumps, or memory cards, and nothing derived from them is committed.
+- **The rules are public.** [`AGENTS.md`](AGENTS.md), [`CLAUDE.md`](CLAUDE.md), and [`GEMINI.md`](GEMINI.md) document roles, forbidden actions, and the verification cycle in full, so any finding here can be audited or reproduced. They are process documentation: safe to ignore if you only care about the port.
+
+Agents are tools. Every published fact is checked against the game by the maintainer, and any remaining error is the maintainer's responsibility.
 
 ---
 
