@@ -105,6 +105,9 @@ tiempo de ejecución) localmente en la máquina de la persona usuaria:
 - **Ninja (`1.12.1`)**: **Apache License 2.0**.
 - **tomli (`2.2.1`)**: licencia **MIT**, Copyright (c) 2021 Taneli Hukkinen
   (respaldo puro en Python para parseo TOML en Python 3.10).
+- **AppImage type2-runtime (`20251108`)**: licencia **MIT**, Copyright (c) 2004-23
+  probonopd (con avisos de `musl libc`, `libfuse`, `squashfuse`, `zstd` y `zlib`
+  enlazados estáticamente en `licenses/type2-runtime-LICENSE.txt`).
 - Cualquier ejecutable u overlay compilado contra `psxrecomp` sigue regido por
   la **PolyForm Noncommercial License 1.0.0**.
 - El AppImage **no redistribuye** bibliotecas de drivers gráficos ni de ventana

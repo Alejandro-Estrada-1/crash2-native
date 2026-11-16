@@ -1,0 +1,29 @@
+diff --git a/psxrecomp_cli.py b/psxrecomp_cli.py
+index 7c85bea3..fb628b4a 100755
+--- a/psxrecomp_cli.py
++++ b/psxrecomp_cli.py
+@@ -2239,6 +2239,24 @@ def stage_overlay_toolchain_for_product(project_root: Path, exe_dir: Path, progr
+         fw = framework_root(project_root)
+         tools_dir = fw / "tools"
+         inc_dir = fw / "runtime" / "include"
++        if os.environ.get("PSXRECOMP_PRESERVE_OVERLAY_TOOLCHAIN") == "1":
++            tk = exe_dir / "overlay_toolchain"
++            py_rel = "python/python.exe" if sys.platform == "win32" else "python/bin/python3"
++            if (tk / py_rel).is_file() and (tk / "compile_overlays.py").is_file():
++                tk_inc = tk / "include"
++                for cand in (exe_dir / "psxrecomp_codegen_include" / "overlay_codegen_hash.h",
++                             inc_dir / "overlay_codegen_hash.h"):
++                    dst_h = tk_inc / "overlay_codegen_hash.h"
++                    if cand.is_file() and tk_inc.is_dir() and cand.resolve() != dst_h.resolve():
++                        shutil.copy2(cand, dst_h)
++                        break
++                compiler = overlay_compiler(project_root)
++                if compiler:
++                    (tk / "compiler.txt").write_text(str(compiler) + "\n", encoding="utf-8")
++                    progress.log(f"overlay toolchain preserved at {tk}; shard compiler: {compiler}")
++                else:
++                    progress.log(f"overlay toolchain preserved at {tk}; no optimising compiler found (tcc tier)")
++                return tk
+         game_emitter = find_psxrecomp_game(project_root)
+         if str(tools_dir) not in sys.path:
+             sys.path.insert(0, str(tools_dir))

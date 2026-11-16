@@ -420,6 +420,15 @@ exec \"${zig_bin}\" ranlib \"\$@\""
   export PYTHONPATH="${payload}/python${PYTHONPATH:+:${PYTHONPATH}}"
 }
 
+replace_symlink() {
+  src="$1"
+  dst="$2"
+  if [ -d "$dst" ] && [ ! -L "$dst" ]; then
+    rm -rf "$dst"
+  fi
+  ln -sfn "$src" "$dst"
+}
+
 prepare_overlay_toolchain() {
   data_dir="$1"
   project="${data_dir}/project"
@@ -427,11 +436,18 @@ prepare_overlay_toolchain() {
   tc_bin="${data_dir}/toolchain/bin"
   otk="${build_dir}/overlay_toolchain"
 
-  mkdir -p "${otk}/python/bin"
+  if [ -d "${otk}/python" ] && [ ! -L "${otk}/python/bin/python3" ]; then
+    rm -rf "${otk}/python"
+  fi
+  mkdir -p "${otk}/python/bin" "${otk}/recompiler"
   ln -sfn "${tc_bin}/overlay-python" "${otk}/python/bin/python3"
   ln -sfn "${data_dir}/.appimage-payload/psxrecomp/tools/compile_overlays.py" "${otk}/compile_overlays.py"
+  ln -sfn "${data_dir}/.appimage-payload/psxrecomp/tools/bios_module_build.py" "${otk}/bios_module_build.py"
   ln -sfn "${tc_bin}/psxrecomp-game" "${otk}/psxrecomp-game"
-  ln -sfn "${project}/psxrecomp/runtime/include" "${otk}/include"
+  ln -sfn "${tc_bin}/psxrecomp-bios" "${otk}/psxrecomp-bios"
+  replace_symlink "${project}/psxrecomp/runtime/include" "${otk}/include"
+  replace_symlink "${data_dir}/.appimage-payload/psxrecomp/bios" "${otk}/bios"
+  replace_symlink "${data_dir}/.appimage-payload/psxrecomp/recompiler/seeds" "${otk}/recompiler/seeds"
 
   overlay_cc=""
   if [ "${CRASH2NATIVE_USE_SYSTEM_CC:-0}" != "1" ]; then
@@ -444,6 +460,7 @@ prepare_overlay_toolchain() {
     export PSX_OVERLAY_AUTOCOMPILE_CMD="\"${tc_bin}/overlay-python\" \"${otk}/compile_overlays.py\" --captures \"${build_dir}/overlay_captures.json\" --game-toml \"${project}/game.toml\" --recompiler \"${tc_bin}/psxrecomp-game\" --runtime-include \"${otk}/include\" --project-root \"${project}\" --out-dir \"${data_dir}/cache\" --compiler gcc --gcc \"${overlay_cc}\""
     export PSX_OVERLAY_AUTOCOMPILE_CWD="${project}"
   fi
+  export PSXRECOMP_PRESERVE_OVERLAY_TOOLCHAIN=1
 }
 
 sanitize_ld_library_path

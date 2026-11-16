@@ -96,6 +96,12 @@ TOMLI_SHA256="cb55c73c5f4408779d0cf3eef9f762b9c9f147a77de7b258bef0a5628adc85cc"
 APPIMAGETOOL_URL="https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage"
 APPIMAGETOOL_SHA256="ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0"
 
+RUNTIME_URL="https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64"
+RUNTIME_SHA256="2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d"
+
+RUNTIME_LICENSE_URL="https://raw.githubusercontent.com/AppImage/type2-runtime/20251108/LICENSE"
+RUNTIME_LICENSE_SHA256="aa154fc9070614bbe7921f89db11efd1dba7a1f3a41685958110e2230f9c0ca1"
+
 fetch_pinned() {
   local url="$1" sha="$2" dest="$3"
   if [[ -f "${dest}" ]]; then
@@ -126,6 +132,8 @@ NINJA_ARCHIVE="${TOOL_CACHE}/ninja-linux-1.12.1.zip"
 NINJA_COPYING="${TOOL_CACHE}/ninja-1.12.1-COPYING.txt"
 TOMLI_WHEEL="${TOOL_CACHE}/tomli-2.2.1-py3-none-any.whl"
 APPIMAGETOOL="${TOOL_CACHE}/appimagetool-1.9.1-x86_64.AppImage"
+RUNTIME_FILE="${TOOL_CACHE}/runtime-x86_64-20251108"
+RUNTIME_LICENSE="${TOOL_CACHE}/type2-runtime-20251108-LICENSE.txt"
 
 echo "==> Descargando / verificando herramientas fijadas por SHA-256"
 fetch_pinned "${ZIG_URL}" "${ZIG_SHA256}" "${ZIG_ARCHIVE}"
@@ -134,7 +142,9 @@ fetch_pinned "${NINJA_URL}" "${NINJA_SHA256}" "${NINJA_ARCHIVE}"
 fetch_pinned "${NINJA_COPYING_URL}" "${NINJA_COPYING_SHA256}" "${NINJA_COPYING}"
 fetch_pinned "${TOMLI_URL}" "${TOMLI_SHA256}" "${TOMLI_WHEEL}"
 fetch_pinned "${APPIMAGETOOL_URL}" "${APPIMAGETOOL_SHA256}" "${APPIMAGETOOL}"
-chmod 0755 "${APPIMAGETOOL}"
+fetch_pinned "${RUNTIME_URL}" "${RUNTIME_SHA256}" "${RUNTIME_FILE}"
+fetch_pinned "${RUNTIME_LICENSE_URL}" "${RUNTIME_LICENSE_SHA256}" "${RUNTIME_LICENSE}"
+chmod 0755 "${APPIMAGETOOL}" "${RUNTIME_FILE}"
 
 TOOLS_STAGE="${WORK_DIR}/tools"
 mkdir -p "${TOOLS_STAGE}/zig" "${TOOLS_STAGE}/cmake-full" "${TOOLS_STAGE}/cmake" \
@@ -328,6 +338,7 @@ cp -f "${TOOLS_STAGE}/zig/LICENSE" "${PAYLOAD}/licenses/Zig-LICENSE.txt"
 cp -f "${CMAKE_COPYRIGHT}" "${PAYLOAD}/licenses/CMake-Copyright.txt"
 cp -f "${NINJA_COPYING}" "${PAYLOAD}/licenses/Ninja-COPYING.txt"
 cp -f "${WORK_DIR}/python"/tomli-*.dist-info/LICENSE "${PAYLOAD}/licenses/tomli-LICENSE.txt"
+cp -f "${RUNTIME_LICENSE}" "${PAYLOAD}/licenses/type2-runtime-LICENSE.txt"
 
 install -m 0755 "${SCRIPT_DIR}/AppRun" "${APPDIR}/AppRun"
 install -m 0644 "${SCRIPT_DIR}/crash2-native.desktop" "${APPDIR}/crash2-native.desktop"
@@ -376,6 +387,7 @@ find "${APPDIR}" -exec touch -h -d "@${SOURCE_DATE_EPOCH}" {} +
 rm -f "${OUTPUT}" "${OUTPUT}.sha256"
 echo "==> Empaquetando ${OUTPUT}"
 ARCH=x86_64 "${APPIMAGETOOL}" --appimage-extract-and-run \
+  --runtime-file "${RUNTIME_FILE}" \
   --mksquashfs-opt -processors --mksquashfs-opt "${JOBS}" \
   "${APPDIR}" "${OUTPUT}"
 chmod 0755 "${OUTPUT}"

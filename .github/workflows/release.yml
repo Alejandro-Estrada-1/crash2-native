@@ -87,7 +87,7 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: .cache/appimage-tools
-          key: appimage-tools-zig0.17.1-cmake3.31.6-ninja1.12.1-tomli2.2.1-appimagetool1.9.1
+          key: appimage-tools-zig0.17.1-cmake3.31.6-ninja1.12.1-tomli2.2.1-appimagetool1.9.1-type2-20251108
 
       - name: Construir AppImage
         env:
