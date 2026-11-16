@@ -1,0 +1,224 @@
+name: Release AppImage
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: >-
+          Versión del AppImage (ej. 0.1.0 o v0.1.0). Si se deja vacío usa
+          0.0.0-<commit> para prueba manual sin publicar release.
+        required: false
+        type: string
+        default: ''
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'workflow_dispatch' }}
+
+jobs:
+  build-appimage:
+    name: Construir AppImage (ubuntu:22.04)
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:22.04
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tag: ${{ steps.meta.outputs.tag }}
+
+    steps:
+      - name: Instalar requisitos mínimos del contenedor (ubuntu:22.04)
+        run: |
+          set -euo pipefail
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates curl xz-utils unzip git python3 \
+            binutils file desktop-file-utils gcc libc6-dev \
+            libgl-dev libx11-dev libxext-dev libxcursor-dev libxfixes-dev \
+            libxi-dev libxrandr-dev libxss-dev libxtst-dev libasound2-dev
+          rm -rf /var/lib/apt/lists/*
+          git config --global --add safe.directory '*'
+
+      - name: Checkout con submódulos
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          submodules: recursive
+
+      - name: Instalar Rust estable
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: stable
+
+      - name: Resolver versión desde etiqueta git
+        id: meta
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            RAW="${{ github.ref_name }}"
+            TAG="${RAW}"
+            VER="${RAW#v}"
+          else
+            RAW="$(printf '%s' "${{ github.event.inputs.version }}" | tr -d '[:space:]')"
+            if [[ -n "${RAW}" ]]; then
+              VER="${RAW#v}"
+              TAG="v${VER}"
+            else
+              SHORT_SHA="$(git rev-parse --short HEAD)"
+              VER="0.0.0-${SHORT_SHA}"
+              TAG="${VER}"
+            fi
+          fi
+          if [[ ! "${VER}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z._-]+)?$ ]]; then
+            echo "::error::versión inválida '${VER}' (esperado X.Y.Z o vX.Y.Z)"
+            exit 1
+          fi
+          echo "version=${VER}" >>"${GITHUB_OUTPUT}"
+          echo "tag=${TAG}" >>"${GITHUB_OUTPUT}"
+          echo "Versión resuelta: ${VER} (tag: ${TAG})"
+
+      - name: Caché de herramientas fijadas por SHA-256
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: .cache/appimage-tools
+          key: appimage-tools-zig0.17.1-cmake3.31.6-ninja1.12.1-tomli2.2.1-appimagetool1.9.1-type2-20251108
+
+      - name: Construir AppImage
+        env:
+          SOURCE_DATE_EPOCH: ${{ github.event.head_commit.timestamp || '' }}
+        run: |
+          set -euo pipefail
+          VER="${{ steps.meta.outputs.version }}"
+          if [[ -z "${SOURCE_DATE_EPOCH}" ]]; then
+            SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          fi
+          export SOURCE_DATE_EPOCH
+          bash packaging/appimage/build-appimage.sh \
+            --version "${VER}" \
+            --output "dist/crash2-native-${VER}-x86_64.AppImage" \
+            --tool-cache ".cache/appimage-tools" \
+            --jobs "$(nproc)"
+
+      - name: Pruebas de humo sin disco del .AppImage
+        run: |
+          set -euo pipefail
+          VER="${{ steps.meta.outputs.version }}"
+          APP="dist/crash2-native-${VER}-x86_64.AppImage"
+          test -x "${APP}"
+
+          "${APP}" --appimage-extract-and-run --help >/dev/null
+          "${APP}" --appimage-extract-and-run --version | grep -qxF "crash2-native ${VER}"
+          "${APP}" --appimage-extract-and-run --check-prereqs
+          "${APP}" --appimage-extract-and-run --verify-disc --help >/dev/null
+
+          TMPD="$(mktemp -d)"
+          trap 'rm -rf "${TMPD}"' EXIT
+          python3 -B - "${TMPD}" <<'PY'
+          import hashlib, pathlib, sys, zlib
+          d = pathlib.Path(sys.argv[1])
+          payload = b"CRASH2_SYNTHETIC_SECTOR_" * 98
+          (d / "s.bin").write_bytes(payload)
+          (d / "s.cue").write_text(
+              'FILE "s.bin" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n',
+              encoding="utf-8",
+          )
+          crc = f"{zlib.crc32(payload) & 0xffffffff:08x}"
+          md5 = hashlib.md5(payload).hexdigest()
+          sha1 = hashlib.sha1(payload).hexdigest()
+          (d / "ok.toml").write_text(
+              f'[game]\nid = "SCUS-94154"\ndisc = "s.cue"\n\n'
+              f'[prepare_disc]\nknown_sizes = [{len(payload)}]\n'
+              f'known_md5 = ["{md5}"]\nknown_sha1 = ["{sha1}"]\nknown_crc32 = ["{crc}"]\n',
+              encoding="utf-8",
+          )
+          (d / "bad.toml").write_text(
+              f'[game]\ndisc = "s.cue"\n\n[prepare_disc]\n'
+              f'known_sizes = [{len(payload)}]\nknown_crc32 = ["00000000"]\n',
+              encoding="utf-8",
+          )
+          PY
+
+          "${APP}" --appimage-extract-and-run --verify-disc --config "${TMPD}/ok.toml" --json >/dev/null
+          rc=0; "${APP}" --appimage-extract-and-run --verify-disc --config "${TMPD}/bad.toml" >/dev/null || rc=$?
+          test "${rc}" -eq 3
+
+          # Verificar AppImage extraído en solo lectura + overlay_toolchain con tomli
+          (cd "${TMPD}" && "${GITHUB_WORKSPACE}/${APP}" --appimage-extract >/dev/null)
+          SQ="${TMPD}/squashfs-root"
+          test ! -e "${SQ}/usr/lib"
+          if find "${SQ}" \( -iname 'libGL*' -o -iname 'libOpenGL*' -o -iname 'libGLX*' -o -iname 'libGLdispatch*' -o -iname 'libEGL*' -o -iname 'libdrm*' \) | grep -q .; then
+            echo "error: el AppImage empaqueta bibliotecas gráficas prohibidas" >&2
+            exit 1
+          fi
+          SQ_PAY="${SQ}/usr/share/crash2-native"
+          if find "${SQ}" \
+            \( -name 'prepared_disc' -o -name 'ghidra' -o -name 'SCUS_*' -o -iname 'SCPH*.BIN' -o -iname '*.cue' -o -iname '*.chd' -o -iname '*.iso' \
+               -o \( -name 'generated' -not -path "${SQ_PAY}/psxrecomp/generated" -not -path "${SQ_PAY}/psxrecomp/recompiler/lib/rabbitizer/include/generated" -not -path "${SQ_PAY}/psxrecomp/recompiler/lib/rabbitizer/cplusplus/include/generated" \) \
+               -o \( -name 'disc' -not -path "${SQ_PAY}/psxrecomp/tools/cycle_testrom/disc" \) \) | grep -q .; then
+            echo "error: el AppImage empaqueta artefactos del juego" >&2
+            exit 1
+          fi
+          chmod -R a-w "${SQ}"
+          rc=0
+          CRASH2NATIVE_DATA_DIR="${TMPD}/user-data" APPDIR="${SQ}" "${SQ}/AppRun" --no-launcher --help || rc=$?
+          test "${rc}" -ne 0
+          "${TMPD}/user-data/build-release/overlay_toolchain/python/bin/python3" -c "import tomli"
+          chmod -R u+w "${SQ}"
+
+      - name: Generar SHA256SUMS
+        run: |
+          set -euo pipefail
+          VER="${{ steps.meta.outputs.version }}"
+          (
+            cd dist
+            sha256sum "crash2-native-${VER}-x86_64.AppImage" > SHA256SUMS
+            sha256sum -c SHA256SUMS
+          )
+
+      - name: Subir artefactos del AppImage
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: crash2-native-appimage
+          path: |
+            dist/crash2-native-*.AppImage
+            dist/SHA256SUMS
+          if-no-files-found: error
+
+  publish:
+    name: Publicar GitHub Release
+    needs: build-appimage
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Descargar artefactos compilados
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: crash2-native-appimage
+          path: dist
+
+      - name: Verificar SHA256SUMS antes de publicar
+        run: |
+          set -euo pipefail
+          (cd dist && sha256sum -c SHA256SUMS)
+
+      - name: Crear GitHub Release con AppImage y SHA256SUMS
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create "${{ github.ref_name }}" \
+            --repo "${{ github.repository }}" \
+            --verify-tag \
+            --title "crash2-native ${{ github.ref_name }}" \
+            --generate-notes \
+            dist/crash2-native-*.AppImage \
+            dist/SHA256SUMS

@@ -166,3 +166,22 @@ emisores en `psxrecomp/recompiler`.
   `x11(dynamic)` + `alsa(dynamic)`. `FindOpenGL` sigue requiriendo biblioteca y
   cabecera GL del sistema (`libglvnd` / `libgl-dev`) salvo que el entorno empaquetado
   aporte cabeceras GL.
+
+---
+
+## 8. `stage_overlay_toolchain_for_product()` borra `overlay_toolchain/python` e intenta descargar aunque el empaquetador ya lo preparó
+
+- **Dónde:** `psxrecomp_cli.py` (`stage_overlay_toolchain_for_product` → `tools/release_stage.py`, `stage_toolchain`).
+- **Qué pasa:** al terminar `psxrecomp_cli.py rebuild` tras la primera compilación del usuario,
+  `stage_toolchain()` ejecuta `shutil.rmtree(overlay_toolchain/python)` antes de intentar descargar
+  `python-build-standalone` (~30 MB) y TinyCC + cabeceras `musl`. En un AppImage offline (o tras un
+  fallo de red), deja `build-release/overlay_toolchain/python/bin/python3` borrado justo antes de que
+  `psx_game_codegen_relaunch_or_exit` haga `execv` directo al binario recién compilado. Con conexión,
+  repite una descarga innecesaria cuando el entorno empaquetado ya aporta `python3` + `tomli` y `zig cc`.
+- **Parche local (candidato a upstream):**
+  [`0002-preserve-prestaged-overlay-toolchain.patch`](0002-preserve-prestaged-overlay-toolchain.patch),
+  que ante `PSXRECOMP_PRESERVE_OVERLAY_TOOLCHAIN=1` (cuando ya existen
+  `overlay_toolchain/python/bin/python3` y `compile_overlays.py`) conserva el directorio ya montado,
+  actualiza `overlay_codegen_hash.h` si apunta a una copia distinta y reescribe `compiler.txt` con el
+  compilador resuelto en `PATH`. Sin esa variable (p. ej. `scripts/build_linux.sh`), el comportamiento
+  del framework no cambia.

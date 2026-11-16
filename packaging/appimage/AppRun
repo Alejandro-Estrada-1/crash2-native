@@ -1,0 +1,532 @@
+#!/bin/sh
+# AppRun — punto de entrada para el AppImage de crash2-native.
+#
+# El AppImage es de solo lectura: los datos escritos por el usuario, las
+# fuentes generadas, el ejecutable compilado, las partidas y la caché de
+# overlays viven en ${CRASH2NATIVE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/crash2-native}.
+set -eu
+
+if [ -z "${APPDIR:-}" ]; then
+  echo "crash2-native: APPDIR no está definido; ejecuta este script dentro del AppImage." >&2
+  exit 1
+fi
+
+payload="${APPDIR}/usr/share/crash2-native"
+setup_runtime="${APPDIR}/usr/bin/crash2_native"
+verify_bin="${APPDIR}/usr/bin/verify-disc"
+app_version="0.0.0"
+if [ -f "${payload}/VERSION" ]; then
+  IFS= read -r app_version < "${payload}/VERSION" || true
+fi
+
+if [ ! -x "${setup_runtime}" ] || [ ! -x "${verify_bin}" ] ||
+   [ ! -f "${payload}/game.toml" ] || [ ! -f "${payload}/CMakeLists.txt" ]; then
+  echo "crash2-native: el payload del AppImage está incompleto." >&2
+  exit 1
+fi
+
+export PYTHONDONTWRITEBYTECODE=1
+
+# Limpia cualquier ruta dentro de $APPDIR en LD_LIBRARY_PATH: nunca debemos
+# inyectar bibliotecas gráficas/de ventana desde el AppImage al juego compilado.
+sanitize_ld_library_path() {
+  if [ -z "${LD_LIBRARY_PATH:-}" ]; then
+    return 0
+  fi
+  old_ifs=$IFS
+  IFS=:
+  new_ld=""
+  for entry in $LD_LIBRARY_PATH; do
+    case "$entry" in
+      ""|"${APPDIR}"|"${APPDIR}/"*) continue ;;
+    esac
+    if [ -z "$new_ld" ]; then
+      new_ld=$entry
+    else
+      new_ld="$new_ld:$entry"
+    fi
+  done
+  IFS=$old_ifs
+  if [ -n "$new_ld" ]; then
+    export LD_LIBRARY_PATH="$new_ld"
+  else
+    unset LD_LIBRARY_PATH || true
+  fi
+}
+
+print_help() {
+  cat <<EOF
+crash2-native ${app_version} — Port nativo para Linux de Crash Bandicoot 2 (SCUS-94154)
+
+Uso:
+  crash2-native.AppImage [opciones]
+
+Opciones del AppImage:
+  --setup               Abre el asistente de generación/compilación aunque ya exista build
+  --verify-disc [RUTA]  Verifica una imagen de disco contra game.toml (sin iniciar GUI)
+  --check-prereqs       Comprueba python3 y cabeceras mínimas de GL/X11/ALSA en el host
+  --version             Muestra la versión empaquetada
+  -h, --help            Muestra esta ayuda
+
+El resto de opciones (p. ej. --no-launcher, --disc <cue>) se pasan al runtime.
+
+Variables de entorno:
+  CRASH2NATIVE_DATA_DIR        Directorio de datos (por defecto ~/.local/share/crash2-native)
+  CRASH2NATIVE_USE_SYSTEM_CC=1 Usa cc/c++ del sistema en lugar del Zig empaquetado
+  CRASH2NATIVE_DISC            Preselecciona la ruta al .cue/.bin en game.toml
+EOF
+}
+
+resolve_data_dir() {
+  if [ -n "${CRASH2NATIVE_DATA_DIR:-}" ]; then
+    printf '%s\n' "${CRASH2NATIVE_DATA_DIR}"
+    return 0
+  fi
+  if [ -n "${XDG_DATA_HOME:-}" ]; then
+    data_home="${XDG_DATA_HOME}"
+  elif [ -n "${HOME:-}" ]; then
+    data_home="${HOME}/.local/share"
+  else
+    echo "crash2-native: HOME no está definido; exporta CRASH2NATIVE_DATA_DIR." >&2
+    exit 1
+  fi
+  printf '%s/crash2-native\n' "${data_home}"
+}
+
+has_header() {
+  rel="$1"
+  for inc in /usr/include /usr/include/x86_64-linux-gnu; do
+    if [ -f "${inc}/${rel}" ]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+has_lib() {
+  lib="$1"
+  for libdir in /usr/lib/x86_64-linux-gnu /lib/x86_64-linux-gnu /usr/lib64 /usr/lib; do
+    if [ -e "${libdir}/${lib}" ]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+distro_install_hint() {
+  id=""
+  id_like=""
+  if [ -r /etc/os-release ]; then
+    # shellcheck disable=SC1091
+    . /etc/os-release || true
+    id=${ID:-}
+    id_like=${ID_LIKE:-}
+  fi
+  case " ${id} ${id_like} " in
+    *ubuntu*|*debian*|*pop*|*mint*|*elementary*)
+      cat <<'EOF' >&2
+Instala los requisitos en Ubuntu/Debian con:
+  sudo apt update && sudo apt install -y \
+    python3 libgl-dev libx11-dev libxext-dev libxcursor-dev libxfixes-dev \
+    libxi-dev libxrandr-dev libxss-dev libxtst-dev libasound2-dev
+EOF
+      ;;
+    *arch*|*manjaro*|*endeavouros*|*steamos*)
+      cat <<'EOF' >&2
+Instala los requisitos en Arch/derivadas con:
+  sudo pacman -S --needed \
+    python libglvnd libx11 libxext libxcursor libxfixes libxi libxrandr \
+    libxss libxtst alsa-lib
+EOF
+      ;;
+    *fedora*|*rhel*|*centos*|*nobara*)
+      cat <<'EOF' >&2
+Instala los requisitos en Fedora con:
+  sudo dnf install -y \
+    python3 mesa-libGL-devel libX11-devel libXext-devel libXcursor-devel \
+    libXfixes-devel libXi-devel libXrandr-devel libXScrnSaver-devel \
+    libXtst-devel alsa-lib-devel
+EOF
+      ;;
+    *)
+      cat <<'EOF' >&2
+Instala en tu distribución: Python 3 y los paquetes de desarrollo (-dev/-devel)
+de OpenGL (libGL/GLVND), X11 + Xext/Xcursor/Xfixes/Xi/Xrandr/Xss/Xtst y ALSA.
+EOF
+      ;;
+  esac
+}
+
+check_build_prereqs() {
+  missing=""
+  if ! command -v python3 >/dev/null 2>&1; then
+    missing="${missing}
+  - python3 (intérprete Python 3)"
+  fi
+
+  if [ "${CRASH2NATIVE_USE_SYSTEM_CC:-0}" = "1" ]; then
+    for sys_tool in cmake ninja; do
+      if ! command -v "$sys_tool" >/dev/null 2>&1; then
+        missing="${missing}
+  - ${sys_tool} (requerido cuando CRASH2NATIVE_USE_SYSTEM_CC=1)"
+      fi
+    done
+    if ! command -v cc >/dev/null 2>&1 && ! command -v gcc >/dev/null 2>&1 && ! command -v clang >/dev/null 2>&1; then
+      missing="${missing}
+  - compilador C (cc/gcc/clang)"
+    fi
+    if ! command -v c++ >/dev/null 2>&1 && ! command -v g++ >/dev/null 2>&1 && ! command -v clang++ >/dev/null 2>&1; then
+      missing="${missing}
+  - compilador C++ (c++/g++/clang++)"
+    fi
+  fi
+
+  if ! has_header "GL/gl.h" || { ! has_lib "libGL.so" && ! has_lib "libOpenGL.so"; }; then
+    missing="${missing}
+  - OpenGL dev (GL/gl.h y libGL.so o libOpenGL.so)"
+  fi
+
+  for x_hdr in \
+    X11/Xlib.h X11/XKBlib.h X11/extensions/Xext.h X11/extensions/shape.h \
+    X11/extensions/Xdbe.h X11/extensions/XTest.h X11/extensions/sync.h \
+    X11/extensions/Xfixes.h X11/extensions/XInput2.h X11/extensions/Xrandr.h \
+    X11/extensions/scrnsaver.h X11/Xcursor/Xcursor.h; do
+    if ! has_header "$x_hdr"; then
+      missing="${missing}
+  - cabecera X11: ${x_hdr}"
+    fi
+  done
+
+  for x_lib in libX11.so libXext.so libXcursor.so libXfixes.so libXi.so libXrandr.so libXss.so libXtst.so; do
+    if ! has_lib "$x_lib"; then
+      missing="${missing}
+  - biblioteca X11 dev: ${x_lib}"
+    fi
+  done
+
+  if ! has_header "alsa/asoundlib.h" || ! has_lib "libasound.so"; then
+    missing="${missing}
+  - ALSA dev (alsa/asoundlib.h y libasound.so)"
+  fi
+
+  if [ -n "$missing" ]; then
+    echo "crash2-native: faltan dependencias del anfitrión para compilar el juego:${missing}" >&2
+    echo "" >&2
+    distro_install_hint
+    return 1
+  fi
+  return 0
+}
+
+clean_dangling_links() {
+  dir="$1"
+  [ -d "$dir" ] || return 0
+  for p in "${dir}"/*; do
+    if [ -L "$p" ] && [ ! -e "$p" ]; then
+      rm -f "$p"
+    fi
+  done
+}
+
+link_entries_except() {
+  src_dir="$1"
+  dst_dir="$2"
+  skip_name="$3"
+  mkdir -p "${dst_dir}"
+  clean_dangling_links "${dst_dir}"
+  for item in "${src_dir}"/*; do
+    [ -e "$item" ] || continue
+    name=${item##*/}
+    if [ "$name" = "$skip_name" ]; then
+      continue
+    fi
+    ln -sfn "$item" "${dst_dir}/${name}"
+  done
+}
+
+apply_disc_override() {
+  cfg="$1"
+  disc_path="$2"
+  tmp_cfg="${cfg}.tmp"
+  awk -v disc="$disc_path" '
+    BEGIN { inserted = 0 }
+    /^[[:space:]]*disc[[:space:]]*=/ { next }
+    /^\[/ && $0 != "[game]" && !inserted {
+      escaped = disc
+      gsub(/\\/, "\\\\", escaped)
+      gsub(/"/, "\\\"", escaped)
+      print "disc = \"" escaped "\""
+      inserted = 1
+    }
+    { print }
+  ' "$cfg" > "$tmp_cfg"
+  mv -f "$tmp_cfg" "$cfg"
+}
+
+prepare_project_tree() {
+  data_dir="$1"
+  project="${data_dir}/project"
+  link_base="${data_dir}/.appimage-payload"
+
+  mkdir -p "${data_dir}/saves" "${data_dir}/cache" "${data_dir}/mods" \
+           "${data_dir}/assets" "${data_dir}/licenses" \
+           "${project}/generated" "${project}/prepared_disc" \
+           "${data_dir}/build-release" "${data_dir}/toolchain/bin"
+
+  ln -sfn "${payload}" "${link_base}"
+  ln -sfn "${APPDIR}/usr" "${data_dir}/.appimage-usr"
+
+  for tree in assets bios licenses; do
+    if [ -d "${payload}/${tree}" ]; then
+      mkdir -p "${data_dir}/${tree}"
+      cp -a "${payload}/${tree}/." "${data_dir}/${tree}/"
+      chmod -R u+rwX "${data_dir}/${tree}"
+    fi
+  done
+  if [ -d "${payload}/mods/bundled" ]; then
+    mkdir -p "${data_dir}/mods/bundled" "${data_dir}/mods/texture-packs"
+    cp -a "${payload}/mods/bundled/." "${data_dir}/mods/bundled/"
+    chmod -R u+rwX "${data_dir}/mods"
+  fi
+  for f in LICENSE NOTICE; do
+    if [ -f "${payload}/${f}" ]; then
+      cp -f "${payload}/${f}" "${data_dir}/${f}"
+      chmod u+rw "${data_dir}/${f}"
+    fi
+  done
+  printf '%s\n' "${app_version}" > "${data_dir}/.appimage-version"
+
+  for item in src seeds patches recomp-ui CMakeLists.txt VERSION; do
+    if [ -e "${payload}/${item}" ]; then
+      ln -sfn "${link_base}/${item}" "${project}/${item}"
+    fi
+  done
+
+  # psxrecomp/ necesita runtime/include escribible porque hash_codegen.cmake
+  # verifica o regenera overlay_codegen_hash.h dentro de esa carpeta.
+  link_entries_except "${link_base}/psxrecomp" "${project}/psxrecomp" "runtime"
+  link_entries_except "${link_base}/psxrecomp/runtime" "${project}/psxrecomp/runtime" "include"
+  link_entries_except "${link_base}/psxrecomp/runtime/include" "${project}/psxrecomp/runtime/include" "overlay_codegen_hash.h"
+  rm -f "${project}/psxrecomp/runtime/include/overlay_codegen_hash.h"
+  if [ -f "${payload}/psxrecomp/runtime/include/overlay_codegen_hash.h" ]; then
+    cp -f "${payload}/psxrecomp/runtime/include/overlay_codegen_hash.h" \
+          "${project}/psxrecomp/runtime/include/overlay_codegen_hash.h"
+    chmod u+rw "${project}/psxrecomp/runtime/include/overlay_codegen_hash.h"
+  fi
+
+  if [ ! -f "${project}/game.toml" ]; then
+    cp -f "${payload}/game.toml" "${project}/game.toml"
+    chmod u+rw "${project}/game.toml"
+  fi
+  if [ ! -f "${data_dir}/game.toml" ]; then
+    cp -f "${project}/game.toml" "${data_dir}/game.toml"
+    chmod u+rw "${data_dir}/game.toml"
+  fi
+  if [ -n "${CRASH2NATIVE_DISC:-}" ] && [ -f "${CRASH2NATIVE_DISC}" ]; then
+    apply_disc_override "${project}/game.toml" "${CRASH2NATIVE_DISC}"
+    apply_disc_override "${data_dir}/game.toml" "${CRASH2NATIVE_DISC}"
+  fi
+
+  ln -sfn "${data_dir}/saves" "${project}/saves"
+  ln -sfn "${data_dir}/cache" "${project}/cache"
+  if [ ! -e "${data_dir}/build-release/saves" ] || [ -L "${data_dir}/build-release/saves" ]; then
+    ln -sfn "${data_dir}/saves" "${data_dir}/build-release/saves"
+  fi
+  if [ ! -e "${data_dir}/build-release/cache" ] || [ -L "${data_dir}/build-release/cache" ]; then
+    ln -sfn "${data_dir}/cache" "${data_dir}/build-release/cache"
+  fi
+}
+
+write_wrapper() {
+  dest="$1"
+  body="$2"
+  printf '%s\n' "$body" > "$dest"
+  chmod 0755 "$dest"
+}
+
+prepare_toolchain_env() {
+  data_dir="$1"
+  project="${data_dir}/project"
+  build_dir="${data_dir}/build-release"
+  tc_bin="${data_dir}/toolchain/bin"
+  link_base="${data_dir}/.appimage-payload"
+  usr_base="${data_dir}/.appimage-usr"
+
+  ln -sfn "${usr_base}/bin/psxrecomp-game" "${tc_bin}/psxrecomp-game"
+  ln -sfn "${usr_base}/bin/psxrecomp-bios" "${tc_bin}/psxrecomp-bios"
+  ln -sfn "${usr_base}/bin/verify-disc" "${tc_bin}/verify-disc"
+
+  write_wrapper "${tc_bin}/overlay-python" "#!/bin/sh
+export PYTHONDONTWRITEBYTECODE=1
+export PYTHONPATH=\"${link_base}/python\${PYTHONPATH:+:\$PYTHONPATH}\"
+exec python3 -B \"\$@\""
+
+  if [ "${CRASH2NATIVE_USE_SYSTEM_CC:-0}" = "1" ]; then
+    tc_mode="system"
+    for w in zig-cc zig-cxx zig-ar zig-ranlib cc c++ clang clang++ gcc g++ ar llvm-ar ranlib llvm-ranlib cmake ninja; do
+      rm -f "${tc_bin}/${w}"
+    done
+    unset CRASH2NATIVE_APPIMAGE_TOOLCHAIN || true
+    unset PSXRECOMP_TOOLCHAIN_DIR || true
+    export PATH="${PATH}:${tc_bin}"
+  else
+    tc_mode="zig"
+    zig_bin="${link_base}/toolchain/zig/zig"
+    write_wrapper "${tc_bin}/zig-cc" "#!/bin/sh
+exec \"${zig_bin}\" cc -target x86_64-linux-gnu.2.28 \"\$@\""
+    write_wrapper "${tc_bin}/zig-cxx" "#!/bin/sh
+exec \"${zig_bin}\" c++ -target x86_64-linux-gnu.2.28 \"\$@\""
+    write_wrapper "${tc_bin}/zig-ar" "#!/bin/sh
+exec \"${zig_bin}\" ar \"\$@\""
+    write_wrapper "${tc_bin}/zig-ranlib" "#!/bin/sh
+exec \"${zig_bin}\" ranlib \"\$@\""
+
+    for alias in cc clang gcc; do
+      ln -sfn "zig-cc" "${tc_bin}/${alias}"
+    done
+    for alias in c++ clang++ g++; do
+      ln -sfn "zig-cxx" "${tc_bin}/${alias}"
+    done
+    for alias in ar llvm-ar; do
+      ln -sfn "zig-ar" "${tc_bin}/${alias}"
+    done
+    for alias in ranlib llvm-ranlib; do
+      ln -sfn "zig-ranlib" "${tc_bin}/${alias}"
+    done
+    ln -sfn "${link_base}/toolchain/cmake/bin/cmake" "${tc_bin}/cmake"
+    ln -sfn "${link_base}/toolchain/ninja/ninja" "${tc_bin}/ninja"
+
+    export CRASH2NATIVE_APPIMAGE_TOOLCHAIN=1
+    export PSXRECOMP_TOOLCHAIN_DIR="${data_dir}/toolchain"
+    export CC="${tc_bin}/cc"
+    export CXX="${tc_bin}/c++"
+    export PATH="${tc_bin}:${PATH}"
+  fi
+
+  prev_mode=""
+  if [ -f "${data_dir}/.toolchain-mode" ]; then
+    IFS= read -r prev_mode < "${data_dir}/.toolchain-mode" || true
+  fi
+  if [ -n "${prev_mode}" ] && [ "${prev_mode}" != "${tc_mode}" ] && [ -f "${build_dir}/CMakeCache.txt" ]; then
+    rm -f "${build_dir}/CMakeCache.txt"
+  fi
+  printf '%s\n' "${tc_mode}" > "${data_dir}/.toolchain-mode"
+
+  export CRASH2NATIVE_PROJECT_ROOT="${project}"
+  export CRASH2NATIVE_BUILD_DIR="${build_dir}"
+  export PSXRECOMP_GAME="${tc_bin}/psxrecomp-game"
+  export PSXRECOMP_BIOS="${tc_bin}/psxrecomp-bios"
+  export PSX_DEPS_OFFLINE=1
+  export PYTHONPATH="${payload}/python${PYTHONPATH:+:${PYTHONPATH}}"
+}
+
+replace_symlink() {
+  src="$1"
+  dst="$2"
+  if [ -d "$dst" ] && [ ! -L "$dst" ]; then
+    rm -rf "$dst"
+  fi
+  ln -sfn "$src" "$dst"
+}
+
+prepare_overlay_toolchain() {
+  data_dir="$1"
+  project="${data_dir}/project"
+  build_dir="${data_dir}/build-release"
+  tc_bin="${data_dir}/toolchain/bin"
+  otk="${build_dir}/overlay_toolchain"
+
+  if [ -d "${otk}/python" ] && [ ! -L "${otk}/python/bin/python3" ]; then
+    rm -rf "${otk}/python"
+  fi
+  mkdir -p "${otk}/python/bin" "${otk}/recompiler"
+  ln -sfn "${tc_bin}/overlay-python" "${otk}/python/bin/python3"
+  ln -sfn "${data_dir}/.appimage-payload/psxrecomp/tools/compile_overlays.py" "${otk}/compile_overlays.py"
+  ln -sfn "${data_dir}/.appimage-payload/psxrecomp/tools/bios_module_build.py" "${otk}/bios_module_build.py"
+  ln -sfn "${tc_bin}/psxrecomp-game" "${otk}/psxrecomp-game"
+  ln -sfn "${tc_bin}/psxrecomp-bios" "${otk}/psxrecomp-bios"
+  replace_symlink "${project}/psxrecomp/runtime/include" "${otk}/include"
+  replace_symlink "${data_dir}/.appimage-payload/psxrecomp/bios" "${otk}/bios"
+  replace_symlink "${data_dir}/.appimage-payload/psxrecomp/recompiler/seeds" "${otk}/recompiler/seeds"
+
+  overlay_cc=""
+  if [ "${CRASH2NATIVE_USE_SYSTEM_CC:-0}" != "1" ]; then
+    overlay_cc="${tc_bin}/gcc"
+  else
+    overlay_cc=$(command -v gcc || command -v cc || command -v clang || true)
+  fi
+  if [ -n "${overlay_cc}" ]; then
+    printf '%s\n' "${overlay_cc}" > "${otk}/compiler.txt"
+    export PSX_OVERLAY_AUTOCOMPILE_CMD="\"${tc_bin}/overlay-python\" \"${otk}/compile_overlays.py\" --captures \"${build_dir}/overlay_captures.json\" --game-toml \"${project}/game.toml\" --recompiler \"${tc_bin}/psxrecomp-game\" --runtime-include \"${otk}/include\" --project-root \"${project}\" --out-dir \"${data_dir}/cache\" --compiler gcc --gcc \"${overlay_cc}\""
+    export PSX_OVERLAY_AUTOCOMPILE_CWD="${project}"
+  fi
+  export PSXRECOMP_PRESERVE_OVERLAY_TOOLCHAIN=1
+}
+
+sanitize_ld_library_path
+
+case "${1:-}" in
+  -h|--help)
+    print_help
+    exit 0
+    ;;
+  --version)
+    printf 'crash2-native %s\n' "${app_version}"
+    exit 0
+    ;;
+  --verify-disc)
+    shift
+    exec "${verify_bin}" --config "${payload}/game.toml" "$@"
+    ;;
+  --check-prereqs)
+    check_build_prereqs
+    echo "crash2-native: prerequisitos de compilación verificados."
+    exit 0
+    ;;
+esac
+
+# Filtra --setup de los argumentos que llegan al ejecutable del juego/setup.
+force_setup="${CRASH2NATIVE_FORCE_SETUP:-0}"
+argc_total=$#
+idx=0
+while [ "$idx" -lt "$argc_total" ]; do
+  arg=$1
+  shift
+  if [ "$arg" = "--setup" ]; then
+    force_setup=1
+  else
+    set -- "$@" "$arg"
+  fi
+  idx=$((idx + 1))
+done
+if [ "$force_setup" = "1" ]; then
+  export CRASH2NATIVE_FORCE_SETUP=1
+fi
+
+DATA_DIR=$(resolve_data_dir)
+prepare_project_tree "${DATA_DIR}"
+prepare_toolchain_env "${DATA_DIR}"
+prepare_overlay_toolchain "${DATA_DIR}"
+
+built_exe="${DATA_DIR}/build-release/crash2_native"
+if [ ! -x "${built_exe}" ] || [ "${force_setup}" = "1" ]; then
+  check_build_prereqs
+  setup_link="${DATA_DIR}/.crash2_native-setup"
+  ln -sfn "${setup_runtime}" "${setup_link}"
+  exec "${setup_link}" "$@"
+fi
+
+if [ ! -f "${DATA_DIR}/build-release/game.toml" ]; then
+  cp -f "${DATA_DIR}/project/game.toml" "${DATA_DIR}/build-release/game.toml"
+fi
+if [ ! -d "${DATA_DIR}/build-release/assets" ]; then
+  ln -sfn "${DATA_DIR}/assets" "${DATA_DIR}/build-release/assets"
+fi
+if [ ! -e "${DATA_DIR}/build-release/bios" ] && [ -d "${DATA_DIR}/bios" ]; then
+  ln -sfn "${DATA_DIR}/bios" "${DATA_DIR}/build-release/bios"
+fi
+if [ ! -e "${DATA_DIR}/build-release/mods" ] && [ -d "${DATA_DIR}/mods" ]; then
+  ln -sfn "${DATA_DIR}/mods" "${DATA_DIR}/build-release/mods"
+fi
+
+exec "${built_exe}" "$@"
