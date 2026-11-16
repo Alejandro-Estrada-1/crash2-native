@@ -297,7 +297,7 @@ prepare_project_tree() {
   done
   printf '%s\n' "${app_version}" > "${data_dir}/.appimage-version"
 
-  for item in src seeds patches recomp-ui CMakeLists.txt VERSION; do
+  for item in src re seeds patches recomp-ui CMakeLists.txt VERSION; do
     if [ -e "${payload}/${item}" ]; then
       ln -sfn "${link_base}/${item}" "${project}/${item}"
     fi
