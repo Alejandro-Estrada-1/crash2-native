@@ -343,7 +343,7 @@ Registro vivo del análisis estático y dinámico de *Crash Bandicoot 2: Cortex 
   - **`DisplayContext` (`0x8006345c`, `2` × `0x2094` B):** `+0x00` id (`0/1`), `+0x04` ot/buf base, `+0x08` `prim_ptr`, `+0x0c` `raw_ticks`, `+0x10` `draw_end_ticks`, `+0x14` `quant_ticks`, `+0x18..+0x2017` OT (`2048` words), `+0x2018` `DISPENV` (`20` B), `+0x202c` `DRAWENV` (`92` B), `+0x2088..+0x2090` cola/arena de nodos de entidades.
 
 - **Frente 3.3 — Dependencias adicionales de `512x216` y `5/8` en HUD / sprites / fondo (Fase 5):**
-  - **Tres sitios independientes con factor `5/8` en Y:** (1) `cam_matrix_aspect_scale` (`0x80017af8`, `* -5 >> 3`), (2) `model_view_matrix_build` (`0x8003d3cc` para texto 3D/HUD, `* 5 >> 3`), y (3) **`matrix_aspect_scale_local` (`0x80043090`, `-((val * 0xa0) >> 8) = -5/8` en fila Y y negación de fila Z)**, clon inline usado por **`hud_transform_2d` (`0x80044558`)** y modos `0x800443ec`/`0x800444bc`/`0x800447a4` (`0x8005b690`). `hud_transform_2d` fija `TR = (x>>8, -(y>>8), gte_stH())`, proyectando HUD respecto a `SetGeomOffset(256, 108)` sin depender de `H`, pero manteniendo escala Y `-5/8` respecto al ancho `512px`.
+  - **Tres sitios independientes con factor `5/8` en Y:** (1) `cam_matrix_aspect_scale` (`0x80017af8`, `* -5 >> 3`), (2) **`model_view_matrix_build` (`0x8003d3cc` para texto 3D/HUD, `-(val * 5) >> 3` en fila 1 Y, confirmado `519 -> -324 = 0xfebc` en `008`)**, y (3) **`matrix_aspect_scale_local` (`0x80043090`, `-((val * 0xa0) >> 8) = -5/8` en fila Y y negación de fila Z)**, clon inline usado por **`hud_transform_2d` (`0x80044558`)** y modos `0x800443ec`/`0x800444bc`/`0x800447a4` (`0x8005b690`). `hud_transform_2d` fija `TR = (x>>8, -(y>>8), gte_stH())`, proyectando HUD respecto a `SetGeomOffset(256, 108)` sin depender de `H`, pero manteniendo escala Y `-5/8` respecto al ancho `512px`.
   - **Sprites, fondo, fundidos y recorte hardware `512x216`:**
     - `sprite_billboard_draw` (`0x80044830`, `0x8005b708[3]`): genera quad `POLY_FT4` proyectado por GTE con centro/vista activos.
     - `draw_bg_tile` (`0x80016a60`): fondo/horizonte `TILE` `512x216` usando `horizon_y` con `0xaa` (`DAT_80060884 * sin(rx) * 0xaa >> 0x14`), `0x6c` y `letterbox_level * 0x78 >> 3`.
@@ -447,6 +447,23 @@ Registro vivo del análisis estático y dinámico de *Crash Bandicoot 2: Cortex 
       uint8_t  _unk123[0x119];
   } GoolObject;
   ```
+
+### 2026-11-15 — Experimento `008`: tercera ruta `5/8`, `PadState` en vivo (Lua), cámaras y auditoría de `seeds/ghidra_funcs.txt`
+
+- **Resultados dinámicos de [008-fase3-cierre-proyeccion-y-camara.md](re/experiments/008-fase3-cierre-proyeccion-y-camara.md) (BIOS `870563ba...`, nivel `0x1e`):**
+  1. **Tercera ruta `5/8` confirmada en Pausa:** `draw_text_3d` (`0x8001bd84`, `ra=0x8001af24, rmode=6`) encadena a `model_view_matrix_build` (`0x8003d3cc`, `ra=0x8001be38, is2d=1`). Entre `0x8003d8f8` y `0x8003d94c` se midió `PRE IR(s3,s0,s4)=(0, 519, 0)` y `R11/12/13=(326, 0, 0)` → `POST -(v*5>>3) (s3,s0,s4)=(0, -324, 0)` con `t0=0x00000146`, `t2=0x0000febc` (`-324 = -(519*5>>3)` exacto). Quedan en `propuesto` por no disparar en esa escena `sprite_billboard_draw` (`0x80044830`), `world_to_screen` (`0x8001ed60`, único xref estático `0x800385b0`) y `SetGeomScreen` con `letterbox_level != 0` (`letterbox_level = 0`, `geom_screen = 288`).
+  2. **Muestreo Lua 45 cuadros (`008-pad-state.lua`, `frame_counter = 22288..22332`):** validó en tiempo real `buttons_pressed == buttons_held & ~buttons_prev1` (`0x2000` en cuadro `32` con `prev1=0`→`0x2000` en `33` y liberación en `36`; `0x1000` en cuadro `39`), `stick_angle` (`1024`/`2048`), `stick_mag` (`256`/`0`), `dir_index` (`2`/`0`/`8`) y desplazamiento real `player=(12126208,249589,43272192) -> (12179456,288001,43196416)`, con `rng_a = 0x00003039` y `rng_b = 0x00000001` estables durante los 45 cuadros de nivel.
+  3. **Cámara y shaders WGEO en vivo:** `cam_mode_dispatch` (`0x80026ca0`, `ra=0x80011b68, trans=5, mode=0, ctrl_scale=0x100`) en juego activo y `zone_gfx_mode_apply` (`0x80020a24`, `ra=0x80017be0`, `zone_gfx=0x0` jugando vs `0x10` en Pausa, `wgeo_shaders=0x8003dd0c..0x80042818`).
+
+- **Auditoría de `seeds/ghidra_funcs.txt` (`748` entradas únicas en `0x800111b0..0x8005b118`, solo lectura):**
+  - **Cobertura sobre `re/symbols.csv` + `re/provisional_symbols.csv`:** de `105` direcciones únicas en código (`< 0x8005b1d8`), **`89` están presentes** y **`16` faltan** en `seeds`:
+    - **14 inicios de función independientes faltantes** (precedidos por `jr ra`): `0x8003be88` (`rcnt2_tick_isr`, `symbols.csv`), `0x8001c718` (`gool_object_tick`, confirmado), `0x80044558` (`hud_transform_2d`, confirmado), `0x80044830` (`sprite_billboard_draw`), `0x800189c4` (`gool_on_entry_nop`), `0x8001ee64` (`opat_init`), `0x8001efd8` (`opat_fini`), `0x8001f018` (`opat_post_load`), `0x8001f9c4` (`ldat_post_load`), `0x8001fddc` (`zdat_on_entry`), `0x8001ff30` (`zdat_on_unload`), `0x8003147c` (`rng_a_mod`), `0x80031658` (`rng_b_init`), `0x8004a364` (`_SendPAD`).
+    - **2 no son funciones independientes:** `0x8003bea4` (`rcnt2_tick_count`, dato de 4 B) y `0x8003aad4` (`gool_op49_exec_mips`, rama de tabla de saltos dentro de `0x8003a014`).
+  - **Tablas de punteros indirectos (`53` inicios independientes faltantes + `8` stubs internos = `61` únicos `< 0x8005b1d8`):** casi todas las funciones faltantes en `seeds` provienen del mismo patrón (tablas de punteros no seguidas automáticamente por Ghidra):
+    - `entry_type_handlers` (`0x8005b1d8`, **21**): `0x800161f8, 0x800162fc, 0x80017198, 0x80017358, 0x800189c4, 0x8001ee64, 0x8001efd8, 0x8001f018, 0x8001f9c4, 0x8001fddc, 0x8001ff30, 0x80024188, 0x80027a38, 0x80027b9c, 0x80029768, 0x800297c8, 0x8002cb14, 0x8002fcd0, 0x8002fce8, 0x800324a8, 0x80033d10`.
+    - `render_prep` (`0x8005b650`, **3**): `0x8004400c, 0x80044178, 0x80044334`.
+    - `render_xform` (`0x8005b690`, **9**): `0x800443ec, 0x80044434, 0x80044468, 0x800444e0, 0x80044534, 0x80044558, 0x80044594, 0x800446f0, 0x800447dc`.
+    - `svtx_prep_draw` (`0x8005b6d0..af`, **20**): `0x8003dd0c, 0x8003ebc4, 0x8003fb84, 0x8003ff14, 0x80040948, 0x80040b44, 0x80040fc4, 0x800417b0, 0x80041b80, 0x800432f4, 0x80043310, 0x80043324, 0x80043374, 0x800434ec, 0x80043504, 0x8004351c, 0x80043554, 0x80043594, 0x8004380c, 0x80044830`.
 
 ---
 
