@@ -187,3 +187,28 @@ emisores en `psxrecomp/recompiler`.
   actualiza `overlay_codegen_hash.h` si apunta a una copia distinta y reescribe `compiler.txt` con el
   compilador resuelto en `PATH`. Sin esa variable (p. ej. `scripts/build_linux.sh`), el comportamiento
   del framework no cambia.
+
+---
+
+## 9. Recorte vertical solo en presentación para bordes overscan de 15 bits
+
+- **Dónde:** `runtime/include/display_scanout.h`, `runtime/include/gpu.h`,
+  `runtime/src/gpu.c`, `runtime/src/gpu_gl_renderer.c`,
+  `runtime/src/gpu_vk_renderer.c`, `runtime/src/main.cpp`.
+- **Qué pasa:** en modos de 15 bits, `gpu_get_display_info()` expone siempre el
+  rectángulo completo de `DispEnv` y las rutas de presentación nativa (`force_4_3`
+  en OpenGL/Vulkan y `640x480` en SDL por software) fijan `4:3` sin atender al
+  recorte vertical. Los títulos que dibujan solo una banda centrada dentro de
+  `DispEnv` (p. ej., `512x216` en `y=12` dentro de `512x240`) conservan franjas
+  negras arriba y abajo dentro de `4:3`, y recortar `di.height` sin ajustar la
+  relación de aspecto estiraría verticalmente las `216` líneas hasta `4:3`.
+- **Parche local (candidato a upstream):**
+  [`0003-display-present-crop.patch`](0003-display-present-crop.patch), que añade
+  un hook genérico exclusivo de presentación (`gpu_set_present_crop_callback` y
+  `gpu_apply_present_crop`), calcula la relación de aspecto recortada sin
+  deformación (`psx_present_cropped_aspect`: `(4 * 240) / (3 * 216) = 40:27`) sin
+  alterar `gpu_get_display_info()`, `depth24`, VRAM, savestates ni la proyección
+  GTE, y propaga el aspecto empaquetado por cuadro (`psx_present_aspect_pack` /
+  `psx_present_aspect_unpack`) por OpenGL (hilo de renderizado, interpolación,
+  hold-last, frame-gen y ruta CPU), Vulkan y SDL por software manteniendo
+  intacto el comportamiento `0`/`1` cuando no hay hook registrado.

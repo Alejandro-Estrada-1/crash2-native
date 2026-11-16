@@ -1,0 +1,435 @@
+diff --git a/runtime/include/display_scanout.h b/runtime/include/display_scanout.h
+index c02968f8..70e9bba2 100644
+--- a/runtime/include/display_scanout.h
++++ b/runtime/include/display_scanout.h
+@@ -103,4 +103,75 @@ static inline int psx_display_vertical_offset(int pal, uint32_t raw_y1,
+     return layout.valid ? layout.offset_y : 0;
+ }
+ 
++/* Pack an explicit positive numerator/denominator aspect override into the
++ * legacy int force_4_3 present parameter while preserving 0 (configured
++ * aspect) and 1 (4:3) semantics for existing callers and tests. */
++#define PSX_PRESENT_ASPECT_CUSTOM_BIT (1u << 30)
++#define PSX_PRESENT_ASPECT_FIELD_MAX  0x7FFFu
++
++static inline int psx_present_aspect_pack(int num, int den)
++{
++    if (num <= 0 || den <= 0 ||
++        num > (int)PSX_PRESENT_ASPECT_FIELD_MAX ||
++        den > (int)PSX_PRESENT_ASPECT_FIELD_MAX)
++        return 1;
++    if ((int64_t)num * 3 == (int64_t)den * 4)
++        return 1;
++    return (int)(PSX_PRESENT_ASPECT_CUSTOM_BIT |
++                 (((uint32_t)num & PSX_PRESENT_ASPECT_FIELD_MAX) << 15) |
++                 ((uint32_t)den & PSX_PRESENT_ASPECT_FIELD_MAX));
++}
++
++static inline void psx_present_aspect_unpack(int flag, int *num, int *den)
++{
++    if (((uint32_t)flag & PSX_PRESENT_ASPECT_CUSTOM_BIT) != 0u) {
++        int n = (int)(((uint32_t)flag >> 15) & PSX_PRESENT_ASPECT_FIELD_MAX);
++        int d = (int)((uint32_t)flag & PSX_PRESENT_ASPECT_FIELD_MAX);
++        if (n > 0 && d > 0) {
++            if (num) *num = n;
++            if (den) *den = d;
++            return;
++        }
++    }
++    if (num) *num = 4;
++    if (den) *den = 3;
++}
++
++/* Compute reduced unstretched presentation aspect when cropping `full_h` active
++ * scanlines down to `crop_h` inside a `base_num:base_den` display raster. */
++static inline void psx_present_cropped_aspect(
++    int base_num, int base_den, uint32_t full_h, uint32_t crop_h,
++    int *out_num, int *out_den)
++{
++    int64_t n, d, a, b;
++    if (base_num <= 0 || base_den <= 0 || full_h == 0u || crop_h == 0u ||
++        crop_h >= full_h) {
++        if (out_num) *out_num = base_num > 0 ? base_num : 4;
++        if (out_den) *out_den = base_den > 0 ? base_den : 3;
++        return;
++    }
++    n = (int64_t)base_num * (int64_t)full_h;
++    d = (int64_t)base_den * (int64_t)crop_h;
++    a = n;
++    b = d;
++    while (b != 0) {
++        int64_t t = a % b;
++        a = b;
++        b = t;
++    }
++    if (a > 0) {
++        n /= a;
++        d /= a;
++    }
++    while ((n > (int64_t)PSX_PRESENT_ASPECT_FIELD_MAX ||
++            d > (int64_t)PSX_PRESENT_ASPECT_FIELD_MAX) && d > 1) {
++        n /= 2;
++        d /= 2;
++    }
++    if (n < 1) n = 1;
++    if (d < 1) d = 1;
++    if (out_num) *out_num = (int)n;
++    if (out_den) *out_den = (int)d;
++}
++
+ #endif
+diff --git a/runtime/include/gpu.h b/runtime/include/gpu.h
+index f0e42cb6..14ca26d4 100644
+--- a/runtime/include/gpu.h
++++ b/runtime/include/gpu.h
+@@ -770,6 +770,23 @@ int      gpu_ws_census_dump(uint32_t f0, uint32_t f1, const char *path);
+ void     gpu_ws_census_set(int on);
+ uint64_t gpu_ws_census_seq(void);
+ 
++/* Optional presentation-only vertical crop adjustment registered by a title
++ * (e.g. from a constructor) to trim built-in top/bottom overscan borders at
++ * display time without mutating VRAM, savestates, GPU state, or guest timing. */
++typedef struct {
++    uint32_t crop_y;    /* top rows skipped inside [0, info->height) */
++    uint32_t crop_h;    /* active rows presented (1 <= crop_h < info->height) */
++    int      aspect_num;/* optional exact presentation aspect, or 0 for auto */
++    int      aspect_den;/* optional exact presentation aspect, or 0 for auto */
++} PsxDisplayPresentCrop;
++
++typedef int (*PsxDisplayPresentCropCb)(const GpuDisplayInfo *info,
++                                       PsxDisplayPresentCrop *out);
++
++void gpu_set_present_crop_callback(PsxDisplayPresentCropCb cb);
++int  gpu_apply_present_crop(GpuDisplayInfo *io, int base_num, int base_den,
++                            int *out_num, int *out_den);
++
+ #ifdef __cplusplus
+ }
+ #endif
+diff --git a/runtime/src/gpu.c b/runtime/src/gpu.c
+index 829ae838..02805dd8 100644
+--- a/runtime/src/gpu.c
++++ b/runtime/src/gpu.c
+@@ -8699,3 +8699,38 @@ uint64_t gpu_pass_state_hash(void) {
+ 
+ uint16_t* gpu_get_vram_ptr(void){ return vram; }
+ uint32_t  gpu_get_vram_bytes(void){ return (uint32_t)sizeof(vram); }
++
++static PsxDisplayPresentCropCb s_present_crop_cb = NULL;
++
++void gpu_set_present_crop_callback(PsxDisplayPresentCropCb cb) {
++    s_present_crop_cb = cb;
++}
++
++int gpu_apply_present_crop(GpuDisplayInfo *io, int base_num, int base_den,
++                           int *out_num, int *out_den) {
++    PsxDisplayPresentCrop crop;
++    int bn = base_num > 0 && base_den > 0 ? base_num : 4;
++    int bd = base_num > 0 && base_den > 0 ? base_den : 3;
++    if (out_num) *out_num = bn;
++    if (out_den) *out_den = bd;
++    if (!io || !s_present_crop_cb) return 0;
++    if (io->disabled || io->depth24 || io->width == 0u || io->height == 0u)
++        return 0;
++    memset(&crop, 0, sizeof(crop));
++    if (!s_present_crop_cb(io, &crop)) return 0;
++    if (crop.crop_h == 0u || crop.crop_h >= io->height ||
++        crop.crop_y >= io->height || crop.crop_h > io->height - crop.crop_y)
++        return 0;
++    if (crop.aspect_num > 0 && crop.aspect_den > 0) {
++        if (out_num) *out_num = crop.aspect_num;
++        if (out_den) *out_den = crop.aspect_den;
++    } else {
++        psx_present_cropped_aspect(bn, bd, io->height, crop.crop_h,
++                                   out_num, out_den);
++    }
++    io->display_y += crop.crop_y;
++    io->height = crop.crop_h;
++    if (io->screen_height > crop.crop_h)
++        io->screen_height = crop.crop_h;
++    return 1;
++}
+diff --git a/runtime/src/gpu_gl_renderer.c b/runtime/src/gpu_gl_renderer.c
+index aa6535bf..4a4bda0a 100644
+--- a/runtime/src/gpu_gl_renderer.c
++++ b/runtime/src/gpu_gl_renderer.c
+@@ -75,6 +75,7 @@
+ 
+ #include "host_overlay.h"
+ #include "gpu.h"
++#include "display_scanout.h"
+ #include "gpu_render.h"
+ #include "gl_scale_limits.h"
+ #include "gpu_sw_renderer.h"
+@@ -1335,14 +1336,22 @@ static void letterbox_rect(int ww, int wh, int *x, int *y, int *w, int *h);
+  * size instead (one filtered blit; the presenter then draws it 1:1), unless
+  * the band is already smaller. force_4_3 picks the letterbox the present
+  * uses. */
++static void letterbox_rect_force(int ww, int wh, int force_4_3,
++                                 int *x, int *y, int *w, int *h);
++
++/* In windowed high-resolution mode, a band bigger than its letterbox would
++ * allocate an oversized surface, copy into it at native size and let the
++ * final blit shrink it; the shrink and its filter belong in the capture,
++ * while the presenter stays 1:1. `force_4_3` is nonzero when pinning native
++ * aspect (including packed custom cropped aspect); this reads the same
++ * letterbox rect the present uses. */
+ static void hiw_capture_size(int sw, int sh, int force_4_3, int *cw, int *ch) {
+     int ww = 0, wh = 0, lx, ly, lw, lh;
+     *cw = sw; *ch = sh;
+     if (!s_hiw || !s_win) return;
+     SDL_GL_GetDrawableSize(s_win, &ww, &wh);
+     if (ww < 1 || wh < 1) return;
+-    if (force_4_3) letterbox_rect_aspect(ww, wh, 4, 3, &lx, &ly, &lw, &lh);
+-    else letterbox_rect(ww, wh, &lx, &ly, &lw, &lh);
++    letterbox_rect_force(ww, wh, force_4_3, &lx, &ly, &lw, &lh);
+     if (lw > 0 && lh > 0 && (int64_t)lw * lh < (int64_t)sw * sh) {
+         *cw = lw; *ch = lh;
+     }
+@@ -1370,7 +1379,7 @@ static void hold_capture_native_fbo(GLuint src_fbo, int dx, int dy, int dw, int
+     s_hold_image.tex = s_hold_tex;
+     s_hold_image.w = s_hold_tw;
+     s_hold_image.h = s_hold_th;
+-    s_hold_force_4_3 = force_4_3 ? 1 : 0;
++    s_hold_force_4_3 = force_4_3;
+     s_hold_linear = linear ? 1 : 0;
+ }
+ 
+@@ -5995,6 +6004,16 @@ static void letterbox_rect_aspect(int ww, int wh, int num, int den,
+ static void letterbox_rect(int ww, int wh, int *x, int *y, int *w, int *h) {
+     letterbox_rect_aspect(ww, wh, s_aspect_num, s_aspect_den, x, y, w, h);
+ }
++static void letterbox_rect_force(int ww, int wh, int force_4_3,
++                                 int *x, int *y, int *w, int *h) {
++    if (force_4_3) {
++        int an = 4, ad = 3;
++        psx_present_aspect_unpack(force_4_3, &an, &ad);
++        letterbox_rect_aspect(ww, wh, an, ad, x, y, w, h);
++    } else {
++        letterbox_rect(ww, wh, x, y, w, h);
++    }
++}
+ 
+ static GLuint make_tex(GLenum internal, int w, int h, GLenum fmt, GLenum type) {
+     GLuint t = 0;
+@@ -6835,10 +6854,7 @@ void gl_renderer_present(const uint32_t *pixels, int src_w, int src_h, int linea
+     glViewport(0, 0, ww, wh);
+     glClearColor(0.f,0.f,0.f,1.f); glClear(GL_COLOR_BUFFER_BIT);
+     int lx, ly, lw, lh;
+-    if (force_4_3)
+-        letterbox_rect_aspect(ww, wh, 4, 3, &lx, &ly, &lw, &lh);
+-    else
+-        letterbox_rect(ww, wh, &lx, &ly, &lw, &lh);
++    letterbox_rect_force(ww, wh, force_4_3, &lx, &ly, &lw, &lh);
+     /* Short GP1(07h) bands (MotK FMV is 128 lines) only fill a fraction of
+      * NTSC active height on hardware. Stretching them to the full letterbox
+      * doubles vertical scale vs horizontal and makes the frame look too wide
+@@ -8146,7 +8162,7 @@ static void hold_publish_interpolated(int captured, GLuint source_fbo,
+         s_hold_image.w = s_interp_w;
+         s_hold_image.h = s_interp_h;
+         s_hold_kind = HOLD_NATIVE;
+-        s_hold_force_4_3 = force_4_3 ? 1 : 0;
++        s_hold_force_4_3 = force_4_3;
+         s_hold_linear = linear ? 1 : 0;
+         return;
+     }
+@@ -8193,10 +8209,7 @@ static int interp_present_pair(GLuint a, GLuint b, float t, int blend_mode) {
+     uint64_t present_t0 = SDL_GetPerformanceCounter();
+     int ww = 0, wh = 0; SDL_GL_GetDrawableSize(s_win, &ww, &wh);
+     int lx, ly, lw, lh;
+-    if (s_interp_force_4_3)
+-        letterbox_rect_aspect(ww, wh, 4, 3, &lx, &ly, &lw, &lh);
+-    else
+-        letterbox_rect(ww, wh, &lx, &ly, &lw, &lh);
++    letterbox_rect_force(ww, wh, s_interp_force_4_3, &lx, &ly, &lw, &lh);
+     glDisable(GL_SCISSOR_TEST);
+     glViewport(0, 0, ww, wh);
+     if (lx != 0 || ly != 0 || lw != ww || lh != wh) {
+@@ -10679,10 +10692,7 @@ int gl_renderer_present_hold_last(void) {
+         present_target_quad(s_hold_image.tex, s_hold_image.w, s_hold_image.h,
+                             0, 0, s_hold_image.w, s_hold_image.h, 0, lx, ly, lw, lh, 0, 0, 1);
+     } else {
+-        if (s_hold_force_4_3)
+-            letterbox_rect_aspect(ww, wh, 4, 3, &lx, &ly, &lw, &lh);
+-        else
+-            letterbox_rect(ww, wh, &lx, &ly, &lw, &lh);
++        letterbox_rect_force(ww, wh, s_hold_force_4_3, &lx, &ly, &lw, &lh);
+         present_target_quad(s_hold_image.tex, s_hold_image.w, s_hold_image.h,
+                             0, 0, s_hold_image.w, s_hold_image.h, s_hold_linear,
+                             lx, ly, lw, lh, 1, 1, 1);
+@@ -10749,10 +10759,7 @@ static void present_vram_impl(int disp_x, int disp_y, int w, int h, int linear,
+     gl_perf_present_enter();   /* per-frame backdrop-phase reset + dbg snapshot live in here */
+     int ww = 0, wh = 0; SDL_GL_GetDrawableSize(s_win, &ww, &wh);
+     int lx, ly, lw, lh;
+-    if (force_4_3)
+-        letterbox_rect_aspect(ww, wh, 4, 3, &lx, &ly, &lw, &lh);
+-    else
+-        letterbox_rect(ww, wh, &lx, &ly, &lw, &lh);
++    letterbox_rect_force(ww, wh, force_4_3, &lx, &ly, &lw, &lh);
+     /* No short-band adjustment on the 15-bit FBO path: a game's native short
+      * display mode (e.g. 216/224-line menus) must fill the rect as before.
+      * The FMV band fix lives in the depth24/CPU present paths only. */
+@@ -12898,10 +12905,8 @@ static void fg_compose(const FgList *b, GLuint wide_fbo, GLuint wide_tex, int li
+         letterbox_rect(ww, wh, &lx, &ly, &lw, &lh);
+         /* A reprojected frame warped the composed wide image itself. */
+         if (!s_fg_reprojected_now) wide_blit_center(wide_fbo, b->disp[0], b->disp[1], b->disp[3]);
+-    } else if (force_4_3) {
+-        letterbox_rect_aspect(ww, wh, 4, 3, &lx, &ly, &lw, &lh);
+     } else {
+-        letterbox_rect(ww, wh, &lx, &ly, &lw, &lh);
++        letterbox_rect_force(ww, wh, force_4_3, &lx, &ly, &lw, &lh);
+     }
+     p_glBindFramebuffer(PSXGL_DRAW_FRAMEBUFFER, 0);
+     glDisable(GL_SCISSOR_TEST);
+diff --git a/runtime/src/gpu_vk_renderer.c b/runtime/src/gpu_vk_renderer.c
+index 0faa63c6..1a81aefc 100644
+--- a/runtime/src/gpu_vk_renderer.c
++++ b/runtime/src/gpu_vk_renderer.c
+@@ -18,6 +18,7 @@
+  */
+ 
+ #include "gpu.h"
++#include "display_scanout.h"
+ #include "gpu_render.h"
+ #include "gpu_vk_renderer.h"
+ #include "video_telemetry.h"
+@@ -1922,6 +1923,12 @@ static int pp_draw(VkCommandBuffer cb, uint32_t idx, uint32_t fr, VkImageView sr
+     return 1;
+ }
+ 
++static void vk_letterbox_force(int ww, int wh, int force_4_3, VkOffset3D dst[2]) {
++    int an = s_aspect_num, ad = s_aspect_den;
++    if (force_4_3) psx_present_aspect_unpack(force_4_3, &an, &ad);
++    letterbox(ww, wh, an, ad, dst);
++}
++
+ int vk_renderer_present_vram(int disp_x, int disp_y, int w, int h,
+                              int linear, int force_4_3) {
+     if (!s_ctx_ok) return 0;
+@@ -1932,8 +1939,8 @@ int vk_renderer_present_vram(int disp_x, int disp_y, int w, int h,
+ 
+     int S = s_scale;
+     VkOffset3D dst[2];
+-    letterbox((int)s_sc_extent.width, (int)s_sc_extent.height,
+-              force_4_3 ? 4 : s_aspect_num, force_4_3 ? 3 : s_aspect_den, dst);
++    vk_letterbox_force((int)s_sc_extent.width, (int)s_sc_extent.height,
++                       force_4_3, dst);
+ 
+     /* Opaque shader present first (see pp_draw); blit only as the fallback. */
+     vram_to(cb, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+@@ -2056,7 +2063,8 @@ void vk_renderer_present_cpu(const uint32_t *pixels, int src_w, int src_h,
+     sc_clear_black(cb, sc);
+ 
+     VkOffset3D dst[2];
+-    letterbox((int)s_sc_extent.width, (int)s_sc_extent.height, force_4_3 ? 4 : s_aspect_num, force_4_3 ? 3 : s_aspect_den, dst);
++    vk_letterbox_force((int)s_sc_extent.width, (int)s_sc_extent.height,
++                       force_4_3, dst);
+     /* Short GP1(07h) bands: letterbox inside the 4:3 rect (see GL present). */
+     if (src_h > 0 && src_h < 240) {
+         int box_h = dst[1].y - dst[0].y;
+diff --git a/runtime/src/main.cpp b/runtime/src/main.cpp
+index 292a5b5c..2d2b2700 100644
+--- a/runtime/src/main.cpp
++++ b/runtime/src/main.cpp
+@@ -9032,6 +9032,7 @@ static void headless_present_image_ring_capture(void) {
+     GpuDisplayInfo di;
+     gpu_get_display_info(&di);
+     if (di.disabled || di.width == 0 || di.height == 0 || di.depth24) return;
++    gpu_apply_present_crop(&di, 4, 3, NULL, NULL);
+     const bool fmv_frame = !g_ws_engaged || gpu_ws_present_native_43() != 0;
+ #ifndef PSX_SDL_NO_RENDER
+     /* Render thread: the same capture, queued at this point of the frame
+@@ -10075,6 +10076,8 @@ static NetplayVblankEpilogue sdl_vblank_present_body(void) {
+     bool pin_43    = false;  /* pillarbox this present (FMV, or a native-wide
+                                 game frame that could not present wide) */
+     bool depth24_frame = false;
++    bool present_crop_applied = false;
++    int crop_aspect_num = 4, crop_aspect_den = 3;
+     bool local_viewport_crop_applied = false;
+     bool game_view_applied = false;
+     uint32_t gv_x = 0, gv_y = 0, gv_w = 0, gv_h = 0;
+@@ -10116,6 +10119,11 @@ static NetplayVblankEpilogue sdl_vblank_present_body(void) {
+         }
+         s_disabled_frame_presented = false;
+         s_force_present_after_load = false;
++        present_crop_applied =
++            gpu_apply_present_crop(&di, 4, 3,
++                                   &crop_aspect_num, &crop_aspect_den) != 0;
++        const int present_aspect_crop_flag =
++            psx_present_aspect_pack(crop_aspect_num, crop_aspect_den);
+         w = di.width; h = di.height;
+         present_h = psx_display_present_height(
+             di.depth24, h, di.screen_height);
+@@ -10236,7 +10244,7 @@ static NetplayVblankEpilogue sdl_vblank_present_body(void) {
+             } else {
+                 gl_renderer_present_vram((int)di.display_x, (int)di.display_y,
+                                          (int)present_w, (int)h, g_video_aa ? 1 : 0,
+-                                         (fmv_frame || nw_pin) ? 1 : 0);
++                                         (fmv_frame || nw_pin) ? present_aspect_crop_flag : 0);
+                 netplay_note_present();
+                 return ep;
+             }
+@@ -10255,7 +10263,8 @@ static NetplayVblankEpilogue sdl_vblank_present_body(void) {
+                 depth24_stage_scanout(&di, sdl_pixel_buf, present_w);
+                 vk_renderer_present_cpu(sdl_pixel_buf, (int)present_w,
+                                         (int)present_h,
+-                                        0 /* nearest */, fmv_frame ? 1 : 0);
++                                        0 /* nearest */,
++                                        fmv_frame ? present_aspect_crop_flag : 0);
+             } else if (wide_present &&
+                        vk_renderer_present_wide((int)di.display_x, (int)di.display_y,
+                                                 (int)h, g_video_aa ? 1 : 0)) {
+@@ -10263,7 +10272,7 @@ static NetplayVblankEpilogue sdl_vblank_present_body(void) {
+             } else {
+                 vk_renderer_present_vram((int)di.display_x, (int)di.display_y,
+                                          (int)present_w, (int)h, g_video_aa ? 1 : 0,
+-                                         (fmv_frame || nw_pin) ? 1 : 0);
++                                         (fmv_frame || nw_pin) ? present_aspect_crop_flag : 0);
+             }
+             netplay_note_present();
+             return ep;
+@@ -10441,7 +10450,10 @@ static NetplayVblankEpilogue sdl_vblank_present_body(void) {
+         gl_renderer_note_present_depth24(depth24_frame ? 1 : 0);
+         gl_renderer_present(sdl_pixel_buf, src_w, src_h,
+                             g_video_aa ? 1 : 0,
+-                            pin_43 ? 1 : 0, 0 /* full width */,
++                            pin_43 ? psx_present_aspect_pack(crop_aspect_num,
++                                                             crop_aspect_den)
++                                   : 0,
++                            0 /* full width */,
+                             psx_cycle_count, s_frame_count, s_fmv_timeline_epoch,
+                             cdrom_get_stream_generation(), cdrom_get_stream_start_lba(),
+                             cdrom_get_delivered_lba(),
+@@ -10485,12 +10497,28 @@ static NetplayVblankEpilogue sdl_vblank_present_body(void) {
+     /* FMV (24-bit) frames are authored 4:3 with no GTE squash to compensate
+      * the widescreen stretch — pillarbox them at native 4:3 instead. Same for
+      * native-wide game frames that could not present wide (pin_43): canonical
+-     * content is never stretched across the wide window. */
+-    int dst_w = pin_43 ? 640 * tex_scale : g_logical_w;
++     * content is never stretched across the wide window. A vertically cropped
++     * native frame expands up to its unstretched cropped aspect when needed. */
++    const bool use_crop_logical =
++        present_crop_applied && pin_43 &&
++        (int64_t)crop_aspect_num * g_video_aspect_den >
++            (int64_t)g_video_aspect_num * crop_aspect_den;
++    const int want_logical_num = use_crop_logical ? crop_aspect_num : g_video_aspect_num;
++    const int want_logical_den = use_crop_logical ? crop_aspect_den : g_video_aspect_den;
++    const int want_logical_w =
++        std::max(1, (int)((int64_t)480 * want_logical_num * tex_scale / want_logical_den));
++    if (g_logical_w != want_logical_w) {
++        g_logical_w = want_logical_w;
++        SDL_RenderSetLogicalSize(sdl_renderer, g_logical_w, 480 * tex_scale);
++    }
++    int dst_w = pin_43
++        ? std::max(1, (int)((int64_t)480 * crop_aspect_num * tex_scale / crop_aspect_den))
++        : g_logical_w;
+     int dst_h = 480 * tex_scale;
+     SDL_Rect dst = { (g_logical_w - dst_w) / 2, 0, dst_w, dst_h };
+-    /* Match GL: short display bands letterbox inside the 4:3 rect. */
+-    if (pin_43 && present_h > 0 && present_h < 240) {
++    /* Match GL: short display bands letterbox inside the 4:3 rect, unless the
++     * cropped aspect already compensated for the trimmed overscan rows. */
++    if (pin_43 && !present_crop_applied && present_h > 0 && present_h < 240) {
+         int content_h = (dst_h * (int)present_h) / 240;
+         if (content_h < 1) content_h = 1;
+         dst.y = (dst_h - content_h) / 2;
