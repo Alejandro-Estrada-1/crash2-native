@@ -61,6 +61,7 @@ crash2-native/
 ├── seeds/                     # verified function starts for static recompilation
 ├── CMakeLists.txt
 ├── src/                       # OUR code: setup host, menu provider, hooks, interpolation, widescreen
+├── mods/preloaded/            # preloaded title mod packages (widescreen toggle, etc.)
 ├── patches/
 │   └── psxrecomp/             # patches to the framework (upstream candidates)
 ├── re/                        # reverse engineering knowledge (published)
@@ -183,8 +184,8 @@ crash2-native/
 **Done when:** tag `v0.1.0` produces an AppImage on GitHub Actions that runs on Arch and Ubuntu 22.04.
 
 ### Phase 5 — Widescreen
-- [ ] Crop top and bottom 12-line black borders (`DRAWENV` `512x216` at `y=12`).
-- [ ] Reimplement "open camera slightly and stretch slightly" cleanly, preserving `5/8` GTE vertical scaling across all three confirmed paths.
+- [x] Crop top and bottom 12-line black borders (`DRAWENV` `512x216` at `y=12`).
+- [x] Reimplement "open camera slightly and stretch slightly" cleanly, preserving `5/8` GTE vertical scaling across all three confirmed paths (preloaded mod `crash2.enhancement.widescreen`, balanced `1.125x` default + `1.10x`/`1.20x`).
 - [ ] Later, level by level: widen true projection/culling where level geometry permits.
 
 ### Phase 6 — High FPS via Interpolation

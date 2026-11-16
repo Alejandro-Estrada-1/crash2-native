@@ -36,7 +36,7 @@ any non-trivial task.
 | Path | Contents | In git? |
 |---|---|---|
 | `psxrecomp/`, `recomp-ui/` | Framework submodules | yes (as submodules) |
-| `game.toml`, `seeds/`, `CMakeLists.txt` | Game configuration and seeds | yes |
+| `game.toml`, `seeds/`, `mods/`, `CMakeLists.txt` | Game configuration, seeds, and preloaded mods | yes |
 | `src/` | Our code: hooks, interpolation, widescreen, setup/menu | yes |
 | `patches/psxrecomp/` | Patches to the framework | yes |
 | `re/provisional_symbols.csv` | Unverified agent proposals | yes |
@@ -168,7 +168,7 @@ address,name,module,hypothesis,evidence,experiment,status,date
 
 | Role | Agent | Branch / Worktree | Can write in |
 |---|---|---|---|
-| Infrastructure | Claude Code | `infra/...` in `../c2-infra` | `scripts/`, `.github/`, `packaging/`, `tools/verify-disc/`, `tools/regress/`, `src/`, `game.toml`, `CMakeLists.txt`, `patches/` |
+| Infrastructure | Claude Code | `infra/...` in `../c2-infra` | `scripts/`, `.github/`, `packaging/`, `tools/verify-disc/`, `tools/regress/`, `src/`, `mods/`, `game.toml`, `CMakeLists.txt`, `patches/` |
 | Reverse Engineering | Antigravity | `re/...` in `../c2-re` | `re/provisional_symbols.csv`, `re/NOTES.md`, `re/NOTES.es.md`, `re/experiments/`, `tools/ghidra/` |
 | Human | — | `main` | `AGENTS.md`, `CLAUDE.md`, `GEMINI.md` (+ `.es.md`), `docs/ROADMAP.md` (+ `.es.md`), `README.md` (+ `.es.md`), `LICENSE`, `NOTICE`, `re/symbols.csv`, `re/structs.h`, `seeds/`, Ghidra project |
 

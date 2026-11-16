@@ -61,6 +61,7 @@ crash2-native/
 ├── seeds/                     # inicios de funciones verificados para recompilación estática
 ├── CMakeLists.txt
 ├── src/                       # NUESTRO código: setup host, menú, hooks, interpolación, pantalla ancha
+├── mods/preloaded/            # paquetes de mods precargados del título (conmutador 16:9, etc.)
 ├── patches/
 │   └── psxrecomp/             # parches al framework (candidatos a upstream)
 ├── re/                        # conocimiento de ingeniería inversa (SÍ se publica)
@@ -183,8 +184,8 @@ crash2-native/
 **Listo cuando:** una etiqueta `v0.1.0` produce un AppImage en GitHub Actions que corre en Arch y en Ubuntu 22.04.
 
 ### Fase 5 — Pantalla ancha
-- [ ] Recortar las franjas negras superior e inferior de 12 líneas (`DRAWENV` `512x216` con `y=12`).
-- [ ] Reimplementar la técnica "abrir poco la cámara y estirar ligeramente" preservando la escala vertical `5/8` en las tres rutas GTE confirmadas.
+- [x] Recortar las franjas negras superior e inferior de 12 líneas (`DRAWENV` `512x216` con `y=12`).
+- [x] Reimplementar la técnica "abrir poco la cámara y estirar ligeramente" preservando la escala vertical `5/8` en las tres rutas GTE confirmadas (mod precargado `crash2.enhancement.widescreen`, apertura `1.125x` por defecto + `1.10x`/`1.20x`).
 - [ ] Después, nivel por nivel: ampliar la proyección/recorte real donde el escenario lo permita.
 
 ### Fase 6 — FPS altos por interpolación
