@@ -8,8 +8,8 @@ on:
     inputs:
       version:
         description: >-
-          Versión del AppImage (ej. 0.1.0 o v0.1.0). Si se deja vacío usa
-          0.0.0-<commit> para prueba manual sin publicar release.
+          AppImage version (e.g. 0.1.0 or v0.1.0). Leave empty to use
+          0.0.0-<commit> for a dry run without publishing a release.
         required: false
         type: string
         default: ''
@@ -22,7 +22,7 @@ concurrency:
 
 jobs:
   build-appimage:
-    name: Construir AppImage (ubuntu:22.04)
+    name: Build AppImage (ubuntu:22.04)
     runs-on: ubuntu-latest
     container:
       image: ubuntu:22.04
@@ -33,7 +33,7 @@ jobs:
       tag: ${{ steps.meta.outputs.tag }}
 
     steps:
-      - name: Instalar requisitos mínimos del contenedor (ubuntu:22.04)
+      - name: Install minimal container requirements (ubuntu:22.04)
         run: |
           set -euo pipefail
           export DEBIAN_FRONTEND=noninteractive
@@ -46,17 +46,17 @@ jobs:
           rm -rf /var/lib/apt/lists/*
           git config --global --add safe.directory '*'
 
-      - name: Checkout con submódulos
+      - name: Checkout with submodules
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           submodules: recursive
 
-      - name: Instalar Rust estable
+      - name: Install stable Rust
         uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
         with:
           toolchain: stable
 
-      - name: Resolver versión desde etiqueta git
+      - name: Resolve version from git tag
         id: meta
         run: |
           set -euo pipefail
@@ -76,20 +76,20 @@ jobs:
             fi
           fi
           if [[ ! "${VER}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z._-]+)?$ ]]; then
-            echo "::error::versión inválida '${VER}' (esperado X.Y.Z o vX.Y.Z)"
+            echo "::error::invalid version '${VER}' (expected X.Y.Z or vX.Y.Z)"
             exit 1
           fi
           echo "version=${VER}" >>"${GITHUB_OUTPUT}"
           echo "tag=${TAG}" >>"${GITHUB_OUTPUT}"
-          echo "Versión resuelta: ${VER} (tag: ${TAG})"
+          echo "Resolved version: ${VER} (tag: ${TAG})"
 
-      - name: Caché de herramientas fijadas por SHA-256
+      - name: Cache SHA-256 pinned build tools
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: .cache/appimage-tools
           key: appimage-tools-zig0.17.1-cmake3.31.6-ninja1.12.1-tomli2.2.1-appimagetool1.9.1-type2-20251108
 
-      - name: Construir AppImage
+      - name: Build AppImage
         env:
           SOURCE_DATE_EPOCH: ${{ github.event.head_commit.timestamp || '' }}
         run: |
@@ -105,7 +105,7 @@ jobs:
             --tool-cache ".cache/appimage-tools" \
             --jobs "$(nproc)"
 
-      - name: Pruebas de humo sin disco del .AppImage
+      - name: Discless .AppImage smoke tests
         run: |
           set -euo pipefail
           VER="${{ steps.meta.outputs.version }}"
@@ -148,12 +148,12 @@ jobs:
           rc=0; "${APP}" --appimage-extract-and-run --verify-disc --config "${TMPD}/bad.toml" >/dev/null || rc=$?
           test "${rc}" -eq 3
 
-          # Verificar AppImage extraído en solo lectura + overlay_toolchain con tomli
+          # Verify extracted read-only AppImage + overlay_toolchain with tomli
           (cd "${TMPD}" && "${GITHUB_WORKSPACE}/${APP}" --appimage-extract >/dev/null)
           SQ="${TMPD}/squashfs-root"
           test ! -e "${SQ}/usr/lib"
           if find "${SQ}" \( -iname 'libGL*' -o -iname 'libOpenGL*' -o -iname 'libGLX*' -o -iname 'libGLdispatch*' -o -iname 'libEGL*' -o -iname 'libdrm*' \) | grep -q .; then
-            echo "error: el AppImage empaqueta bibliotecas gráficas prohibidas" >&2
+            echo "error: AppImage bundles forbidden graphics libraries" >&2
             exit 1
           fi
           SQ_PAY="${SQ}/usr/share/crash2-native"
@@ -161,7 +161,7 @@ jobs:
             \( -name 'prepared_disc' -o -name 'ghidra' -o -name 'SCUS_*' -o -iname 'SCPH*.BIN' -o -iname '*.cue' -o -iname '*.chd' -o -iname '*.iso' \
                -o \( -name 'generated' -not -path "${SQ_PAY}/psxrecomp/generated" -not -path "${SQ_PAY}/psxrecomp/recompiler/lib/rabbitizer/include/generated" -not -path "${SQ_PAY}/psxrecomp/recompiler/lib/rabbitizer/cplusplus/include/generated" \) \
                -o \( -name 'disc' -not -path "${SQ_PAY}/psxrecomp/tools/cycle_testrom/disc" \) \) | grep -q .; then
-            echo "error: el AppImage empaqueta artefactos del juego" >&2
+            echo "error: AppImage bundles game artifacts" >&2
             exit 1
           fi
           chmod -R a-w "${SQ}"
@@ -171,7 +171,7 @@ jobs:
           "${TMPD}/user-data/build-release/overlay_toolchain/python/bin/python3" -c "import tomli"
           chmod -R u+w "${SQ}"
 
-      - name: Generar SHA256SUMS
+      - name: Generate SHA256SUMS
         run: |
           set -euo pipefail
           VER="${{ steps.meta.outputs.version }}"
@@ -181,7 +181,7 @@ jobs:
             sha256sum -c SHA256SUMS
           )
 
-      - name: Subir artefactos del AppImage
+      - name: Upload AppImage artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: crash2-native-appimage
@@ -191,7 +191,7 @@ jobs:
           if-no-files-found: error
 
   publish:
-    name: Publicar GitHub Release
+    name: Publish GitHub Release
     needs: build-appimage
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
@@ -199,18 +199,18 @@ jobs:
       contents: write
 
     steps:
-      - name: Descargar artefactos compilados
+      - name: Download built artifacts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: crash2-native-appimage
           path: dist
 
-      - name: Verificar SHA256SUMS antes de publicar
+      - name: Verify SHA256SUMS before publishing
         run: |
           set -euo pipefail
           (cd dist && sha256sum -c SHA256SUMS)
 
-      - name: Crear GitHub Release con AppImage y SHA256SUMS
+      - name: Create GitHub Release with AppImage and SHA256SUMS
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

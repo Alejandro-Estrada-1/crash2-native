@@ -1,6 +1,6 @@
-/* Configuración del "codegen host" de psxrecomp para crash2-native.
- * Basado en psxrecomp/tools/new_project_layout/templates/codegen_setup.h.in.
- * Solo se compila con PSX_RECOMP_UI=ON (necesita recomp_launcher.h). */
+/* psxrecomp "codegen host" configuration for crash2-native.
+ * Based on psxrecomp/tools/new_project_layout/templates/codegen_setup.h.in.
+ * Compiled only when PSX_RECOMP_UI=ON (requires recomp_launcher.h). */
 #ifndef CODEGEN_SETUP_H
 #define CODEGEN_SETUP_H
 

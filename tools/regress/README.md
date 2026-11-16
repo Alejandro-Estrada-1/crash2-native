@@ -1,24 +1,26 @@
-# tools/regress — pruebas de regresión por estado lógico
+English | [Español](README.es.md)
 
-Herramienta en Rust (pendiente, Fase 6/7) que reproduce replays y compara el
-**estado lógico** del juego (posiciones, estado de entidades, RNG, contadores)
-contra una referencia. Nunca compara imágenes. Con interpolación o pantalla
-ancha activadas, el estado debe ser idéntico bit a bit al de referencia
-(`AGENTS.md`, "Prioridades técnicas").
+# tools/regress — Logical-State Regression Tests
 
-## Condiciones fijas de cada referencia
+Pending Rust tool (Phase 6/7) that replays inputs and compares the game's
+**logical state** (positions, entity states, RNG, counters) against a recorded
+reference. It never compares framebuffer pixels. With interpolation or
+widescreen enabled, logical state must remain bit-for-bit identical to the
+reference (`AGENTS.md`, "Technical Priorities").
 
-Una referencia solo es comparable con corridas hechas en las mismas condiciones.
-Cada referencia debe registrar estas, y la herramienta debe negarse a comparar si
-alguna difiere:
+## Fixed Reference Conditions
 
-- **BIOS: hoy, OpenBIOS** (la que trae psxrecomp, `bios/openbios.bin`). Con otra
-  BIOS el código del juego en RAM no es el mismo: OpenBIOS reescribe al arrancar
-  las funciones PsyQ `_patch_pad`, `_send_pad` y `_remove_ChgclrPAD`
-  (`0x8004A2EC`–`0x8004A47C`) para que salten el parche del kernel; con una BIOS
-  de Sony esas funciones corren sin cambios y parchean el kernel. El manejo del
-  pad puede diferir. Detalle y evidencia: `patches/psxrecomp/UPSTREAM.md`, punto 6.
-  Registrar también si la BIOS fue saltada (`bios_boot=HLE`) o no.
-- Disco (SHA-1 de Redump) y commit del framework (`psxrecomp`).
-- Seeds y C generado (hash de `generated/`).
-- Configuración que afecte la lógica (`game.toml`, mods activos).
+A reference is only comparable with runs executed under identical conditions.
+Each reference must record the following fields, and the tool must refuse to
+compare if any of them differs:
+
+- **BIOS: currently OpenBIOS** (bundled by `psxrecomp`, `bios/openbios.bin`).
+  With a different BIOS, game code in RAM differs: OpenBIOS rewrites the PsyQ
+  functions `_patch_pad`, `_send_pad`, and `_remove_ChgclrPAD`
+  (`0x8004A2EC`–`0x8004A47C`) at boot so they skip kernel patching, whereas a
+  Sony BIOS executes them unmodified and patches the kernel. Pad handling may
+  differ. Details and evidence: `patches/psxrecomp/UPSTREAM.md`, section 6. Also
+  record whether BIOS boot was skipped (`bios_boot=HLE`) or not.
+- Disc (Redump SHA-1) and framework commit (`psxrecomp`).
+- Seeds and generated C (hash of `generated/`).
+- Any configuration affecting game logic (`game.toml`, active mods).

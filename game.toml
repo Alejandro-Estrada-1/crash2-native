@@ -1,16 +1,16 @@
-# Configuración de Crash Bandicoot 2: Cortex Strikes Back (EUA, SCUS-94154)
-# para psxrecomp. Esquema completo: psxrecomp/docs/config_schema.md.
+# Configuration for Crash Bandicoot 2: Cortex Strikes Back (USA, SCUS-94154)
+# for psxrecomp. Full schema: psxrecomp/docs/config_schema.md.
 #
-# Los valores de [game] salen de la cabecera PS-X EXE de SCUS_941.54 y los de
-# [prepare_disc] de la tabla de Redump (docs/ROADMAP.md). Coinciden con lo que
-# produce psxrecomp/tools/new_project_layout/probe_disc.py sobre el disco.
+# [game] values come from the SCUS_941.54 PS-X EXE header and [prepare_disc]
+# values from the Redump table (docs/ROADMAP.md). They match the output of
+# psxrecomp/tools/new_project_layout/probe_disc.py on the disc.
 
 [game]
 name = "Crash Bandicoot 2: Cortex Strikes Back"
 id = "SCUS-94154"
 players = 1
-# psxrecomp_cli.py generate extrae aquí el ejecutable desde el disco.
-# Nunca dentro de disc/: es un enlace a ../privado/disc, que solo se lee.
+# psxrecomp_cli.py generate extracts the executable here from the disc.
+# Never under disc/: it is a symlink to ../privado/disc, which is read-only.
 exe = "prepared_disc/SCUS_941.54"
 disc = "disc/Crash Bandicoot 2 - Cortex Strikes Back (USA).cue"
 load_address = "0x80010000"
@@ -18,8 +18,8 @@ entry_pc = "0x80049B2C"
 text_size = "0x0004F800"
 stack_base = "0x801FFFF0"
 
-# Identidad del disco (una sola pista de datos, sin CDDA). generate y
-# verify-disc rechazan una imagen que no coincida.
+# Disc identity (single data track, no CDDA). generate and verify-disc reject
+# any mismatched image.
 [prepare_disc]
 out_dir = "prepared_disc"
 bin_name = "Crash Bandicoot 2 - Cortex Strikes Back (USA).bin"

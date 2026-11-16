@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Empaqueta crash2-native en un AppImage portable compilado sobre el host actual
-# (debe ejecutarse en ubuntu:22.04 para releases públicos compatibles con glibc >= 2.28).
+# Package crash2-native into a portable AppImage built on the current host
+# (must run inside ubuntu:22.04 for public releases targeting glibc >= 2.28).
 #
-# Incluye:
-#   - usr/bin/crash2_native (--setup-host con dependencias opcionales desactivadas)
+# Bundles:
+#   - usr/bin/crash2_native (--setup-host with optional system deps disabled)
 #   - usr/bin/verify-disc, psxrecomp-game, psxrecomp-bios
-#   - Zig 0.17.1, CMake 3.31.6 recortado, Ninja 1.12.1 y tomli 2.2.1 (Python 3.10)
-#   - Árbol mínimo del SDK + third_party/*.tar.gz (sin generated/, disc/ ni .git/)
-#   - Avisos y licencias en licenses/ (nunca libGL/libOpenGL/libGLX/libdrm)
+#   - Zig 0.17.1, trimmed CMake 3.31.6, Ninja 1.12.1, and tomli 2.2.1 (Python 3.10)
+#   - Minimal SDK tree + vendored third_party/*.tar.gz (no generated/, disc/, or .git/)
+#   - Notices and licenses in licenses/ (never libGL/libOpenGL/libGLX/libdrm)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -27,11 +27,11 @@ while [[ $# -gt 0 ]]; do
     --tool-cache) TOOL_CACHE="${2:?}"; shift 2 ;;
     --jobs) JOBS="${2:?}"; shift 2 ;;
     -h|--help)
-      sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
       ;;
     *)
-      echo "build-appimage.sh: argumento desconocido: $1" >&2
+      echo "build-appimage.sh: unknown argument: $1" >&2
       exit 2
       ;;
   esac
@@ -49,7 +49,7 @@ if [[ -z "${VERSION}" ]]; then
 fi
 VERSION="${VERSION#v}"
 if [[ ! "${VERSION}" =~ ^[0-9A-Za-z._+-]+$ ]]; then
-  echo "build-appimage.sh: versión inválida '${VERSION}'" >&2
+  echo "build-appimage.sh: invalid version '${VERSION}'" >&2
   exit 2
 fi
 
@@ -69,15 +69,15 @@ case "${TOOL_CACHE}" in
   *) TOOL_CACHE="${PWD}/${TOOL_CACHE}" ;;
 esac
 if [[ ! "${JOBS}" =~ ^[1-9][0-9]*$ ]]; then
-  echo "build-appimage.sh: --jobs inválido '${JOBS}'" >&2
+  echo "build-appimage.sh: invalid --jobs '${JOBS}'" >&2
   exit 2
 fi
 if [[ "$(uname -s)" != "Linux" || "$(uname -m)" != "x86_64" ]]; then
-  echo "build-appimage.sh: requiere Linux x86_64." >&2
+  echo "build-appimage.sh: requires Linux x86_64." >&2
   exit 1
 fi
 
-# Pines oficiales verificados por SHA-256.
+# Official SHA-256 pinned tool and runtime downloads.
 ZIG_URL="https://ziglang.org/download/0.17.1/zig-x86_64-linux-0.17.1.tar.xz"
 ZIG_SHA256="3581863e3cbcfd0fce0efc682ce7e9e93da96668a977791d356a26d2a7e9b17a"
 
@@ -114,7 +114,7 @@ fetch_pinned() {
   tmp="$(mktemp "${dest}.XXXXXX")"
   curl -fsSL --http1.1 --retry 5 --retry-all-errors --retry-delay 2 -L -o "${tmp}" "${url}"
   if ! echo "${sha}  ${tmp}" | sha256sum -c - >/dev/null 2>&1; then
-    echo "build-appimage.sh: SHA-256 inválido para ${url}" >&2
+    echo "build-appimage.sh: invalid SHA-256 for ${url}" >&2
     rm -f "${tmp}"
     exit 1
   fi
@@ -135,7 +135,7 @@ APPIMAGETOOL="${TOOL_CACHE}/appimagetool-1.9.1-x86_64.AppImage"
 RUNTIME_FILE="${TOOL_CACHE}/runtime-x86_64-20251108"
 RUNTIME_LICENSE="${TOOL_CACHE}/type2-runtime-20251108-LICENSE.txt"
 
-echo "==> Descargando / verificando herramientas fijadas por SHA-256"
+echo "==> Downloading / verifying SHA-256 pinned tools"
 fetch_pinned "${ZIG_URL}" "${ZIG_SHA256}" "${ZIG_ARCHIVE}"
 fetch_pinned "${CMAKE_URL}" "${CMAKE_SHA256}" "${CMAKE_ARCHIVE}"
 fetch_pinned "${NINJA_URL}" "${NINJA_SHA256}" "${NINJA_ARCHIVE}"
@@ -184,7 +184,7 @@ EOF
 chmod 0755 "${TOOLS_STAGE}/bin/zig-cc" "${TOOLS_STAGE}/bin/zig-cxx" \
            "${TOOLS_STAGE}/bin/zig-ar" "${TOOLS_STAGE}/bin/zig-ranlib"
 
-echo "==> Preparando copia limpia del SDK (sin archivos del juego ni .git)"
+echo "==> Preparing clean SDK copy (excluding game files and .git)"
 SDK_SRC="${WORK_DIR}/sdk-src"
 mkdir -p "${SDK_SRC}"
 tar -C "${REPO_ROOT}" \
@@ -210,7 +210,7 @@ find "${SDK_SRC}" -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
 shopt -s nullglob
 for p in "${SDK_SRC}/patches/psxrecomp/"*.patch; do
   if GIT_CEILING_DIRECTORIES="${WORK_DIR}" git -C "${SDK_SRC}/psxrecomp" apply --reverse --check "$p" >/dev/null 2>&1; then
-    echo "    parche ya aplicado en copia: $(basename "$p")"
+    echo "    patch already applied in staging copy: $(basename "$p")"
   else
     GIT_CEILING_DIRECTORIES="${WORK_DIR}" git -C "${SDK_SRC}/psxrecomp" apply "$p"
   fi
@@ -219,14 +219,14 @@ shopt -u nullglob
 
 printf '%s\n' "${VERSION}" > "${SDK_SRC}/VERSION"
 
-echo "==> Vendorizando dependencias en third_party/ (PSX_DEPS_OFFLINE=ON)"
+echo "==> Vendoring dependencies under third_party/ (PSX_DEPS_OFFLINE=ON)"
 "${SDK_SRC}/psxrecomp/tools/ci/vendor_deps.sh" SDL3 psx_zlib psx_libwebp psx_libchdr
 "${SDK_SRC}/psxrecomp/tools/ci/vendor_deps.sh" --check SDL3 psx_zlib psx_libwebp psx_libchdr
 
 export PATH="${TOOLS_STAGE}/cmake/bin:${TOOLS_STAGE}/ninja:${PATH}"
 export PYTHONDONTWRITEBYTECODE=1
 
-echo "==> Compilando setup-host con zig cc (modo AppImage aislado)"
+echo "==> Building setup-host with zig cc (isolated AppImage mode)"
 BUILD_SETUP="${WORK_DIR}/build-setup"
 CRASH2NATIVE_APPIMAGE_TOOLCHAIN=1 PSX_DEPS_OFFLINE=1 \
 cmake -S "${SDK_SRC}" -B "${BUILD_SETUP}" -G Ninja \
@@ -247,7 +247,7 @@ SETUP_EXEC_MANIFEST="${BUILD_SETUP}/${EXE_BASENAME}.execution.json"
 test -x "${SETUP_BIN}"
 test -f "${SETUP_EXEC_MANIFEST}"
 
-echo "==> Compilando emisores precompilados (psxrecomp-game, psxrecomp-bios)"
+echo "==> Building prebuilt emitters (psxrecomp-game, psxrecomp-bios)"
 BUILD_EMITTERS="${WORK_DIR}/build-emitters"
 cmake -S "${SDK_SRC}/psxrecomp/recompiler" -B "${BUILD_EMITTERS}" -G Ninja \
   -DCMAKE_BUILD_TYPE=Release \
@@ -259,7 +259,7 @@ cmake -S "${SDK_SRC}/psxrecomp/recompiler" -B "${BUILD_EMITTERS}" -G Ninja \
   -DBUILD_TESTING=OFF
 cmake --build "${BUILD_EMITTERS}" --target psxrecomp-game psxrecomp-bios -j "${JOBS}"
 
-echo "==> Compilando tools/verify-disc"
+echo "==> Building tools/verify-disc"
 VERIFY_TARGET="${WORK_DIR}/target-verify-disc"
 cargo build --locked --release \
   --manifest-path "${REPO_ROOT}/tools/verify-disc/Cargo.toml" \
@@ -267,7 +267,7 @@ cargo build --locked --release \
 VERIFY_BIN="${VERIFY_TARGET}/release/verify-disc"
 test -x "${VERIFY_BIN}"
 
-echo "==> Armando AppDir"
+echo "==> Assembling AppDir"
 APPDIR="${WORK_DIR}/crash2-native.AppDir"
 PAYLOAD="${APPDIR}/usr/share/crash2-native"
 mkdir -p "${APPDIR}/usr/bin" "${PAYLOAD}/licenses" "${PAYLOAD}/toolchain"
@@ -324,7 +324,7 @@ cp -a "${TOOLS_STAGE}/zig" "${PAYLOAD}/toolchain/zig"
 cp -a "${TOOLS_STAGE}/cmake" "${PAYLOAD}/toolchain/cmake"
 cp -a "${TOOLS_STAGE}/ninja" "${PAYLOAD}/toolchain/ninja"
 
-# Licencias y avisos completos en licenses/
+# Full license texts and notices in licenses/.
 cp -f "${SDK_SRC}/LICENSE" "${PAYLOAD}/licenses/LICENSE"
 cp -f "${SDK_SRC}/NOTICE" "${PAYLOAD}/licenses/NOTICE"
 cp -f "${SDK_SRC}/psxrecomp/LICENSE" "${PAYLOAD}/licenses/psxrecomp-LICENSE.txt"
@@ -345,15 +345,15 @@ install -m 0644 "${SCRIPT_DIR}/crash2-native.desktop" "${APPDIR}/crash2-native.d
 install -m 0644 "${SCRIPT_DIR}/crash2-native.png" "${APPDIR}/crash2-native.png"
 ln -sfn "crash2-native.png" "${APPDIR}/.DirIcon"
 
-echo "==> Verificando higiene del AppDir (cero libGL/libOpenGL/libGLX/libdrm ni datos del juego)"
+echo "==> Checking AppDir hygiene (zero libGL/libOpenGL/libGLX/libdrm or game data)"
 sh -n "${APPDIR}/AppRun"
 if [[ -e "${APPDIR}/usr/lib" ]]; then
-  echo "build-appimage.sh: error: usr/lib no debe existir en el AppDir" >&2
+  echo "build-appimage.sh: error: usr/lib must not exist in AppDir" >&2
   exit 1
 fi
 bad_gl="$(find "${APPDIR}" \( -iname 'libGL*' -o -iname 'libOpenGL*' -o -iname 'libGLX*' -o -iname 'libGLdispatch*' -o -iname 'libEGL*' -o -iname 'libdrm*' \) || true)"
 if [[ -n "${bad_gl}" ]]; then
-  echo "build-appimage.sh: error: se encontraron bibliotecas gráficas prohibidas dentro del AppDir:" >&2
+  echo "build-appimage.sh: error: forbidden graphics libraries found inside AppDir:" >&2
   printf '%s\n' "${bad_gl}" >&2
   exit 1
 fi
@@ -368,13 +368,13 @@ if [[ -d "${PAYLOAD}/psxrecomp/generated" ]]; then
   fi
 fi
 if [[ -n "${bad_game}" ]]; then
-  echo "build-appimage.sh: error: se encontraron artefactos del juego dentro del AppDir:" >&2
+  echo "build-appimage.sh: error: game artifacts found inside AppDir:" >&2
   printf '%s\n' "${bad_game}" >&2
   exit 1
 fi
 for bin in "${APPDIR}/usr/bin/${EXE_BASENAME}" "${APPDIR}/usr/bin/verify-disc" "${APPDIR}/usr/bin/psxrecomp-game" "${APPDIR}/usr/bin/psxrecomp-bios"; do
   if env -u LD_LIBRARY_PATH ldd "${bin}" | grep -q 'not found'; then
-    echo "build-appimage.sh: dependencia sin resolver en ${bin}" >&2
+    echo "build-appimage.sh: unresolved dependency in ${bin}" >&2
     exit 1
   fi
 done
@@ -385,7 +385,7 @@ export SOURCE_DATE_EPOCH
 find "${APPDIR}" -exec touch -h -d "@${SOURCE_DATE_EPOCH}" {} +
 
 rm -f "${OUTPUT}" "${OUTPUT}.sha256"
-echo "==> Empaquetando ${OUTPUT}"
+echo "==> Packaging ${OUTPUT}"
 ARCH=x86_64 "${APPIMAGETOOL}" --appimage-extract-and-run \
   --runtime-file "${RUNTIME_FILE}" \
   --mksquashfs-opt -processors --mksquashfs-opt "${JOBS}" \
@@ -395,4 +395,4 @@ chmod 0755 "${OUTPUT}"
   cd "$(dirname "${OUTPUT}")"
   sha256sum "$(basename "${OUTPUT}")" > "$(basename "${OUTPUT}").sha256"
 )
-echo "AppImage generado: ${OUTPUT}"
+echo "AppImage generated: ${OUTPUT}"

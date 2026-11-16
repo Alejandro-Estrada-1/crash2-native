@@ -1,4 +1,4 @@
-//! Cálculo en una sola pasada de tamaño, CRC-32, MD5 y SHA-1.
+//! Single-pass computation of size, CRC-32, MD5, and SHA-1 digests.
 
 use std::fmt::Write as _;
 use std::fs::File;
@@ -8,7 +8,7 @@ use std::path::Path;
 const READ_BUFFER_SIZE: usize = 1024 * 1024;
 const IEEE_CRC32_POLY: u32 = 0xEDB8_8320;
 
-/// Resultados de integridad de una pista de datos.
+/// Integrity digests computed from a data track.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DiscDigests {
     pub size: u64,
@@ -17,7 +17,7 @@ pub struct DiscDigests {
     pub sha1: String,
 }
 
-/// Calcula tamaño, CRC-32 (IEEE 802.3), MD5 y SHA-1 leyendo `path` solo una vez.
+/// Computes size, CRC-32 (IEEE 802.3), MD5, and SHA-1 by reading `path` once.
 pub fn compute_file_digests(path: &Path) -> io::Result<DiscDigests> {
     let file = File::open(path)?;
     let mut reader = BufReader::with_capacity(READ_BUFFER_SIZE, file);
@@ -56,7 +56,7 @@ fn to_hex(bytes: &[u8]) -> String {
     out
 }
 
-/// Acumulador CRC-32 IEEE 802.3 con tabla precalculada en compilación.
+/// IEEE 802.3 CRC-32 accumulator with compile-time lookup table.
 pub struct Crc32 {
     state: u32,
 }
@@ -104,7 +104,7 @@ impl Default for Crc32 {
     }
 }
 
-/// Acumulador MD5 según RFC 1321.
+/// RFC 1321 MD5 accumulator.
 pub struct Md5 {
     state: [u32; 4],
     len_bytes: u64,
@@ -156,7 +156,7 @@ impl Md5 {
 
         while data.len() >= 64 {
             let (block, rest) = data.split_at(64);
-            self.compress(block.try_into().expect("bloque MD5 de 64 bytes"));
+            self.compress(block.try_into().expect("64-byte MD5 block"));
             data = rest;
         }
 
@@ -225,7 +225,7 @@ impl Default for Md5 {
     }
 }
 
-/// Acumulador SHA-1 según FIPS 180-4.
+/// FIPS 180-4 SHA-1 accumulator.
 pub struct Sha1 {
     state: [u32; 5],
     len_bytes: u64,
@@ -266,7 +266,7 @@ impl Sha1 {
 
         while data.len() >= 64 {
             let (block, rest) = data.split_at(64);
-            self.compress(block.try_into().expect("bloque SHA-1 de 64 bytes"));
+            self.compress(block.try_into().expect("64-byte SHA-1 block"));
             data = rest;
         }
 
@@ -364,13 +364,13 @@ mod tests {
     }
 
     #[test]
-    fn crc32_vectores_estandar() {
+    fn crc32_standard_vectors() {
         assert_eq!(crc32_hex(b""), "00000000");
         assert_eq!(crc32_hex(b"123456789"), "cbf43926");
     }
 
     #[test]
-    fn md5_vectores_rfc1321() {
+    fn md5_rfc1321_vectors() {
         assert_eq!(md5_hex(b""), "d41d8cd98f00b204e9800998ecf8427e");
         assert_eq!(md5_hex(b"abc"), "900150983cd24fb0d6963f7d28e17f72");
         assert_eq!(md5_hex(b"message digest"), "f96b697d7cb7938d525a2f31aaf161d0");
@@ -378,7 +378,7 @@ mod tests {
             md5_hex(b"abcdefghijklmnopqrstuvwxyz"),
             "c3fcd3d76192e4007dfb496cca67e13b"
         );
-        // Caso límite de relleno (56 bytes -> obliga un bloque extra).
+        // Padding boundary case (56 bytes requires an extra compression block).
         let msg56 = b"01234567890123456789012345678901234567890123456789012345";
         assert_eq!(msg56.len(), 56);
         assert_eq!(md5_hex(msg56), "8af270b2847610e742b0791b53648c09");
@@ -393,7 +393,7 @@ mod tests {
     }
 
     #[test]
-    fn sha1_vectores_fips180() {
+    fn sha1_fips180_vectors() {
         assert_eq!(sha1_hex(b""), "da39a3ee5e6b4b0d3255bfef95601890afd80709");
         assert_eq!(sha1_hex(b"abc"), "a9993e364706816aba3e25717850c26c9cd0d89d");
         assert_eq!(
@@ -403,7 +403,7 @@ mod tests {
     }
 
     #[test]
-    fn streaming_en_fragmentos_irregulares() {
+    fn streams_irregular_chunks() {
         let mut h_md5 = Md5::new();
         let mut h_sha1 = Sha1::new();
         let mut h_crc = Crc32::new();

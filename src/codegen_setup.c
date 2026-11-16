@@ -1,13 +1,13 @@
-/* Configuración del asistente de primer uso ("Generate & rebuild") para
- * crash2-native. Basado en la plantilla del framework
+/* First-run wizard configuration ("Generate & rebuild") for crash2-native.
+ * Based on the framework template
  * (psxrecomp/tools/new_project_layout/templates/codegen_setup.c.in).
  *
- * El asistente corre en la máquina del usuario: lee su disco, ejecuta
- * psxrecomp_cli.py generate (C en generated/) y luego rebuild (build-release/).
- * El C generado nunca sale de esa máquina ni entra a git.
+ * The wizard runs on the user's machine: reads their disc, runs
+ * psxrecomp_cli.py generate (C under generated/) and then rebuild
+ * (build-release/). Generated C never leaves that machine or enters git.
  *
- * En Linux, el CLI usa cmake, ninja, python3 y el compilador del PATH; si
- * falta alguno, falla con un mensaje claro y no descarga nada
+ * On Linux, the CLI uses cmake, ninja, python3, and the compiler on PATH; if
+ * any tool is missing, it fails with a clear message and downloads nothing
  * (tools/toolchain_pack.py, ensure_toolchain). */
 
 #include "codegen_setup.h"

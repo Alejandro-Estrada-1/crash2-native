@@ -1,13 +1,15 @@
+English | [Español](README.es.md)
+
 # verify-disc
 
-Verifica de forma independiente (solo lectura) que la imagen de disco indicada
-en `game.toml` (o con `--disc`) coincide en tamaño, CRC-32, MD5 y SHA-1 con
-la tabla Redump declarada en `[prepare_disc]`.
+Independently verifies (read-only) that the disc image specified in `game.toml`
+(or via `--disc`) matches the size, CRC-32, MD5, and SHA-1 Redump table
+declared under `[prepare_disc]`.
 
-Calcula los tres resúmenes en una sola pasada secuencial por bloques, sin
-dependencias externas y sin modificar ningún archivo de `disc/`.
+Computes all three digests in a single sequential block-buffered pass, with zero
+external crate dependencies and without modifying anything inside `disc/`.
 
-## Uso
+## Usage
 
 ```bash
 cargo run --manifest-path tools/verify-disc/Cargo.toml --
@@ -15,23 +17,23 @@ cargo run --manifest-path tools/verify-disc/Cargo.toml -- --disc "disc/Crash Ban
 cargo run --manifest-path tools/verify-disc/Cargo.toml -- --config game.toml --json
 ```
 
-Opciones:
+Options:
 
-- `--config <ruta>`: archivo `game.toml` a leer (`game.toml` por defecto).
-- `--disc <ruta>`: imagen `.cue` o `.bin` a verificar (por defecto `[game] disc`
-  de `game.toml`, resuelto respecto al directorio del `game.toml`).
-- `--json`: imprime el reporte en formato JSON en una línea.
+- `--config <path>`: `game.toml` file to read (`game.toml` by default).
+- `--disc <path>`: `.cue` or `.bin` image to verify (defaults to `[game] disc`
+  in `game.toml`, resolved relative to the `game.toml` directory).
+- `--json`: prints the verification report as single-line JSON.
 
-## Códigos de salida
+## Exit Codes
 
-- `0`: la imagen coincide con los valores declarados en `[prepare_disc]`.
-- `2`: error de argumentos, lectura o análisis (`game.toml` o `.cue`).
-- `3`: la imagen no coincide con el tamaño o con algún hash esperado.
+- `0`: image matches the values declared under `[prepare_disc]`.
+- `2`: argument, I/O, or parsing error (`game.toml` or `.cue`).
+- `3`: image size or at least one expected hash does not match.
 
-## Pruebas
+## Tests
 
-Las pruebas unitarias y de integración usan archivos temporales sintéticos y no
-requieren el disco real del juego:
+Unit and integration tests use temporary synthetic files and do not require the
+real game disc:
 
 ```bash
 cargo test --manifest-path tools/verify-disc/Cargo.toml
