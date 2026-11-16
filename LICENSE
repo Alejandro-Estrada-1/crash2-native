@@ -1,10 +1,10 @@
-crash2-native — Aclaración sobre compilación y distribución binaria:
-La licencia MIT de abajo aplica únicamente al código fuente original de este
-repositorio (`src/`, `tools/`, `scripts/`, `re/`, `patches/`, etc.). Cualquier
-compilación o distribución binaria enlazada con el framework `psxrecomp` queda
-sujeta además a la licencia PolyForm Noncommercial License 1.0.0
-(<https://polyformproject.org/licenses/noncommercial/1.0.0>); consulta `NOTICE`
-para los avisos completos de terceros.
+crash2-native -- Note on binary builds and distribution:
+The MIT License below applies only to the original source code in this
+repository (`src/`, `tools/`, `scripts/`, `re/`, `patches/`, etc.). Any binary
+build or distribution linked against the `psxrecomp` framework is additionally
+governed by the PolyForm Noncommercial License 1.0.0
+(<https://polyformproject.org/licenses/noncommercial/1.0.0>); see `NOTICE` for
+full third-party attributions and notices.
 
 MIT License
 

@@ -1,24 +1,24 @@
-# Inicios de funciones de SCUS_941.54 para el recompilador de psxrecomp.
+# Function start addresses in SCUS_941.54 for the psxrecomp recompiler.
 #
-# Formato (lo lee recompiler/src/main_psx.cpp):
-#   - una dirección hexadecimal por línea, en la columna 0;
-#   - las líneas que empiezan con '#' se ignoran;
-#   - lo que sigue a la dirección se ignora, así que se puede anotar:
-#       0x8001ABCD  # origen: ...
+# Format (parsed by recompiler/src/main_psx.cpp):
+#   - one hexadecimal address per line, starting at column 0;
+#   - lines starting with '#' are ignored;
+#   - trailing text after the address is ignored, allowing inline notes:
+#       0x8001ABCD  # origin: ...
 #
-# Cada bloque indica su origen. Dos clases, que no se mezclan:
-#   - MECÁNICOS: salen de herramientas (escaneo JAL, huecos que reporta el
-#     runtime). Los propone el agente de infraestructura por PR.
-#   - INGENIERÍA INVERSA: verificados en Ghidra + emulador. Solo los agrega el
-#     humano, con referencia a re/symbols.csv.
+# Each block states its origin. Two separate classes, never mixed:
+#   - MECHANICAL: derived by tools (JAL scan, runtime gap captures, static
+#     indirect jump/callback tables). Proposed via PR.
+#   - REVERSE ENGINEERING: verified in Ghidra + emulator. Added only by the
+#     human maintainer, referencing re/symbols.csv.
 
-# === MECÁNICOS: escaneo JAL ===============================================
-# Herramienta: psxrecomp/tools/new_project_layout/probe_disc.py
-#   (psxrecomp b263b855), sobre el disco verificado contra Redump.
-# Contenido: el punto de entrada (0x80049B2C) y todos los destinos de JAL
-#   directos dentro del texto del ejecutable (0x80010000 + 0x4F800).
-# Fecha: 2026-11-15. 746 direcciones.
-# Límite conocido: no ve llamadas indirectas (jalr, tablas de punteros).
+# === MECHANICAL: JAL scan ===================================================
+# Tool: psxrecomp/tools/new_project_layout/probe_disc.py
+#   (psxrecomp b263b855), run against the Redump-verified disc image.
+# Contents: entry point (0x80049B2C) and all direct JAL targets within the
+#   executable text section (0x80010000 + 0x4F800).
+# Date: 2026-11-15. 746 addresses.
+# Known limitation: does not follow indirect calls (jalr, pointer tables).
 0x800111B0
 0x800112A4
 0x8001144C
@@ -766,36 +766,36 @@
 0x8005B108
 0x8005B118
 
-# === MECÁNICOS: huecos que reportó el runtime ================================
-# Origen: overlay_captures.json de la primera corrida (2026-11-15, nivel 1).
-# Criterio: página del texto ejecutada en el intérprete, idéntica byte a byte
-# al ejecutable original, y entrada ausente del C generado.
-0x8004075C  # tabla de punteros a funciones en 0x8005B6FC (sus vecinos sí estaban generados); relleno nop antes; 1.a instr. mfc2
-0x8003AE24  # tabla de 11 punteros en 0x8005C624 (los otros 10 ya eran alias); entra como función de 0xC bytes
+# === MECHANICAL: gaps reported by the runtime ================================
+# Source: overlay_captures.json from the first run (2026-11-15, level 1).
+# Criterion: text page executed in the interpreter, byte-identical
+# to the original executable, and entry missing from the generated C.
+0x8004075C  # function pointer table at 0x8005B6FC (its neighbors were already generated); nop padding before; 1st instr. mfc2
+0x8003AE24  # 11-pointer table at 0x8005C624 (the other 10 were already aliases); enters as a 0xC-byte function
 
-# === INGENIERÍA INVERSA (re/symbols.csv) ====================================
-# Funciones confirmadas en Ghidra + PCSX-Redux (experimentos 003, 007, 008)
-# que no estaban en el escaneo JAL inicial por invocarse vía eventos o tablas.
+# === REVERSE ENGINEERING (re/symbols.csv) ====================================
+# Functions confirmed in Ghidra + PCSX-Redux (experiments 003, 007, 008)
+# missing from the initial JAL scan because they are called via events or tables.
 0x8003BE88  # rcnt2_tick_isr (OpenEvent RCntCNT2, exp 003)
-0x8001C718  # gool_object_tick (callback de árbol 0x80018dd0, exp 007)
-0x80044558  # hud_transform_2d (tabla 0x8005b690[6/13], exp 007)
+0x8001C718  # gool_object_tick (tree callback 0x80018dd0, exp 007)
+0x80044558  # hud_transform_2d (table 0x8005b690[6/13], exp 007)
 
-# === MECÁNICOS: tablas de punteros estáticos en SCUS_941.54 =================
-# Origen: auditoría estática en Ghidra sobre SCUS_941.54 (re/NOTES.md, 008).
-# Inicios de función independientes (precedidos por jr ra / delay slot) en las
-# 4 tablas de despacho indirecto, excluyendo datos y saltos internos.
-# Tabla entry_type_handlers (0x8005B1D8, 21 entradas faltantes):
+# === MECHANICAL: static pointer tables in SCUS_941.54 ========================
+# Source: static audit in Ghidra on SCUS_941.54 (re/NOTES.md, 008).
+# Independent function starts (preceded by jr ra / delay slot) in the
+# 4 indirect dispatch tables, excluding data and internal jumps.
+# entry_type_handlers table (0x8005B1D8, 21 missing entries):
 0x800161F8
 0x800162FC
 0x80017198
 0x80017358
-0x800189C4  # gool_on_entry_nop (propuesto)
-0x8001EE64  # opat_init (propuesto)
-0x8001EFD8  # opat_fini (propuesto)
-0x8001F018  # opat_post_load (propuesto)
-0x8001F9C4  # ldat_post_load (propuesto)
-0x8001FDDC  # zdat_on_entry (propuesto)
-0x8001FF30  # zdat_on_unload (propuesto)
+0x800189C4  # gool_on_entry_nop (proposed)
+0x8001EE64  # opat_init (proposed)
+0x8001EFD8  # opat_fini (proposed)
+0x8001F018  # opat_post_load (proposed)
+0x8001F9C4  # ldat_post_load (proposed)
+0x8001FDDC  # zdat_on_entry (proposed)
+0x8001FF30  # zdat_on_unload (proposed)
 0x80024188
 0x80027A38
 0x80027B9C
@@ -806,11 +806,11 @@
 0x8002FCE8
 0x800324A8
 0x80033D10
-# Tabla render_prep (0x8005B650, 3 entradas faltantes):
+# render_prep table (0x8005B650, 3 missing entries):
 0x8004400C
 0x80044178
 0x80044334
-# Tabla render_xform (0x8005B690, 8 restantes; 0x80044558 ya arriba):
+# render_xform table (0x8005B690, 8 remaining; 0x80044558 listed above):
 0x800443EC
 0x80044434
 0x80044468
@@ -819,7 +819,7 @@
 0x80044594
 0x800446F0
 0x800447DC
-# Tabla svtx_prep_draw (0x8005B6D0..0x8005B7AF, 20 entradas faltantes):
+# svtx_prep_draw table (0x8005B6D0..0x8005B7AF, 20 missing entries):
 0x8003DD0C
 0x8003EBC4
 0x8003FB84
@@ -839,4 +839,4 @@
 0x80043554
 0x80043594
 0x8004380C
-0x80044830  # sprite_billboard_draw (propuesto)
+0x80044830  # sprite_billboard_draw (proposed)

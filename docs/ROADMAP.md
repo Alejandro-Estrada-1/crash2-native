@@ -1,124 +1,124 @@
-# crash2-native — Mapa del proyecto
+English | [Español](ROADMAP.es.md)
 
-Port nativo para Linux de *Crash Bandicoot 2: Cortex Strikes Back* (PS1, EUA, `SCUS-94154`),
-construido sobre **psxrecomp**, con ingeniería inversa propia (Ghidra + agentes vía MCP),
-distribuido como **AppImage** y automatizado con **GitHub Actions**.
+# crash2-native — Project Roadmap
 
-> El nombre `crash2-native` es provisional. Cámbialo cuando quieras.
+Native Linux port of *Crash Bandicoot 2: Cortex Strikes Back* (PS1, USA, `SCUS-94154`),
+built on **psxrecomp**, with independent reverse engineering (Ghidra + agents via MCP),
+distributed as an **AppImage**, and automated with **GitHub Actions**.
+
+> The name `crash2-native` is provisional and can be changed anytime.
 
 ---
 
-## 1. Por qué este enfoque
+## 1. Why This Approach
 
-| Decisión | Razón |
+| Decision | Rationale |
 |---|---|
-| **Construir sobre psxrecomp, no sobre Crash2Recomp** | Crash2Recomp (Zumbo06) no tiene licencia propia: su launcher, scripts y parches son "todos los derechos reservados". psxrecomp sí tiene licencia (PolyForm Noncommercial 1.0.0) y está diseñado para que cada juego viva en su propio repo. |
-| **Ingeniería inversa propia (Ghidra + REA/MCP)** | Para no depender del trabajo sin licencia de otro. Clean-room: de sus notas usamos *qué* problemas existen; ni su código ni sus offsets, direcciones o estructuras. Todo lo que publicamos lo observamos y verificamos nosotros en SCUS-94154. |
-| **Linux primero** | psxrecomp ya funciona en Linux (RE3 y Hércules lo demuestran). Crash2Recomp solo existe para Windows. |
-| **AppImage + Zig** | El juego se compila en la máquina del usuario. Zig da un compilador de C completo, portable y sin dependencias, y puede apuntar a una glibc vieja. |
-| **GitHub Actions** | Compilación reproducible en un contenedor viejo (compatibilidad con más distros), releases automáticos con checksums, y cero carga para la laptop. |
-| **Proyecto propio** | Todo el código es explicable línea por línea en una entrevista. Valor de portafolio (DevOps + ingeniería inversa). |
+| **Build on psxrecomp, not Crash2Recomp** | Crash2Recomp (Zumbo06) has no license: its launcher, scripts, and patches are "all rights reserved". `psxrecomp` has a clear license (PolyForm Noncommercial 1.0.0) and is designed so each game lives in its own repo. |
+| **Independent reverse engineering (Ghidra + MCP)** | Avoids depending on someone else's unlicensed work. Clean-room: from its release notes we use *what* problems exist; never its code, offsets, addresses, or structures. Everything we publish is independently observed and verified on `SCUS-94154`. |
+| **Linux first** | `psxrecomp` already runs natively on Linux (demonstrated by RE3 and Hercules). Crash2Recomp only targets Windows. |
+| **AppImage + Zig** | The game compiles on the user's machine. Zig provides a full, portable C/C++ compiler targeting older glibc (`x86_64-linux-gnu.2.28`), along with trimmed CMake, Ninja, prebuilt emitters, and vendored archives. |
+| **GitHub Actions** | Reproducible builds in `ubuntu:22.04` (broad distro compatibility), automated releases with checksums, and zero load on the dev laptop. |
+| **Owned codebase** | Every line of our code is explainable end-to-end. Strong portfolio value (DevOps + reverse engineering). |
 
 ---
 
-## 2. Lo que ya sabemos de otros proyectos
+## 2. Lessons from Other Projects
 
-| Fuente | Lección | Cómo la aplicamos |
+| Source | Lesson | How We Apply It |
 |---|---|---|
-| **psxrecomp** (mstan) | Los juegos viven en su propio repo con `psxrecomp/` y `recomp-ui/` como submódulos. La pantalla ancha genérica se configura en `[widescreen]` del `game.toml`, localizando los puntos de recorte. Los overlays se capturan y compilan en tiempo de ejecución; el intérprete es la red de seguridad. | Estructura del repo, `game.toml`, seeds. |
-| **Hercules Recompiled** | Port sobre psxrecomp que ya compila en Linux. Aplica sus cambios al framework como parches en `patches/psxrecomp/`. | Plantilla de referencia para la Fase 1. |
-| **Mega Man X6 Recomp** | Seeds obtenidos con Ghidra. Bases de datos de Ghidra, binarios, código generado y memory cards **se quedan en local**. Los cambios al framework van upstream. | Reglas de qué se versiona y qué no. |
-| **RE3 Recompiled** (lo usamos) | `recomp-ui` es un launcher nativo; Python solo hace falta al compilar. Un binario compilado en Arch (glibc 2.43) no corre en Ubuntu. | Usar `recomp-ui`; compilar releases contra glibc vieja. |
-| **Crash2Recomp** (solo ideas) | Pantalla ancha: abrir mucho la cámara muestra escenario que no existe (los niveles terminan cerca del borde 4:3). Su solución: abrir poco y cerrar el hueco estirando la imagen (~2% de deformación). Hay una franja de líneas negras arriba y abajo que se debe recortar. Cuidado con proporciones (tuvo un bug de imagen 15% más alta). 60 FPS duplicando el bucle: hubo que corregir animaciones, plataformas y temporizadores, y aparecieron bugs por nivel (cámara en Air Crash). | Pantalla ancha inicial con su técnica (reimplementada); evitar su enfoque de 60 FPS. |
-| **Crash 1 Launcher** (MIT) | 60/120/240 FPS por **interpolación**: la lógica sigue a 30 y se interpolan las posiciones de objetos y cámara, sin efectos en la física. Pantalla ancha real con arreglos a mano por nivel y un editor propio. La decompilación c1 fue el mapa, no el código. | FPS altos por interpolación; pantalla ancha real en una fase posterior. |
-| **crash2-decomp** (Codeberg) | Decompilación *matching* de SCUS-94154, recién empezada. Usa IA, pero "nada depende de la palabra de la IA". | Fuente de nombres de funciones; destino de nuestras contribuciones. |
-| **portcove** (catálogo) | Señaló en Crash2Recomp: sin hashes de imágenes aceptadas, sin rechazo de imágenes incorrectas, versión interna que no coincidía con el release, sin checksums. | Nuestras mejoras de infraestructura. |
-| **Savage Wind / ZA Recomp** | Incluir el compilador (Zig) en el paquete para compilar en la máquina del usuario. | AppImage con Zig. |
+| **psxrecomp** (mstan) | Titles live in their own repo with `psxrecomp/` and `recomp-ui/` as submodules. Runtime blocks outside boot text are captured and compiled dynamically; the interpreter is the safety net. | Repo layout, `game.toml`, `seeds/`, runtime overlay toolchain. |
+| **Hercules Recompiled** | `psxrecomp` port compiling on Linux. Keeps framework changes as patches in `patches/psxrecomp/`. | Reference template for Phase 1. |
+| **Mega Man X6 Recomp** | Seeds exported from Ghidra. Ghidra databases, binaries, generated C, and memory cards **stay local**. Framework fixes go upstream. | Strict git hygiene rules. |
+| **RE3 Recompiled** | `recomp-ui` is a native launcher; Python is only needed at build/overlay time. Binaries built on Arch (newer glibc) fail on Ubuntu. | Use `recomp-ui`; build releases against older glibc (`ubuntu:22.04`). |
+| **Crash2Recomp** (ideas only) | Widescreen: widening camera too far reveals missing geometry near the 4:3 edge; cropping the 12-line top/bottom black borders and keeping proportions clean avoids the known vertical-stretch bug. Avoid 60 FPS via game-loop duplication (breaks animations, timers, and per-level camera behavior). | Initial widescreen respecting `5/8` aspect scaling; avoid loop-duplication 60 FPS. |
+| **Crash 1 Launcher** (MIT) | 60/120/240 FPS via **interpolation**: game logic stays at 30 Hz and camera/object transforms are interpolated on draw with zero physics side effects. | High FPS via interpolation in Phase 6. |
+| **crash2-decomp** (Codeberg) | Matching decompilation of `SCUS-94154`. Uses AI, with "nothing depending on AI's word alone". | Source of naming context; destination for open contributions. |
+| **portcove** (catalog) | Flagged in Crash2Recomp: missing accepted disc hashes, no bad-disc rejection, mismatched internal vs release version, missing checksums. | Our infrastructure priorities (`verify-disc`, tag-driven versions, `SHA256SUMS`). |
+| **Savage Wind / ZA Recomp** | Bundle Zig inside the release package to compile on the user's machine. | AppImage with Zig. |
 
 ---
 
-## 3. Qué mejoramos respecto a Crash2Recomp
+## 3. Improvements Over Crash2Recomp
 
-1. **Linux nativo** desde el primer día (AppImage).
-2. **Licencia clara**: nuestro código bajo licencia propia + aviso de PolyForm NC de psxrecomp.
-3. **Verificación de disco estricta**: tabla de hashes de Redump y rechazo de imágenes incorrectas con un mensaje claro.
-4. **Releases verificables**: la versión sale de la etiqueta de git; `SHA256SUMS` en cada release.
-5. **FPS altos por interpolación** en lugar de duplicar el bucle: la lógica queda idéntica a la de la PS1.
-6. **Pruebas de regresión**: replays + comparación del estado del juego, para que ninguna mejora rompa la lógica.
-7. **Conocimiento abierto**: símbolos y estructuras publicados y compartidos con crash2-decomp.
+1. **Native Linux** from day one (AppImage).
+2. **Clear licensing**: MIT for our code + PolyForm NC / third-party notices in `NOTICE`.
+3. **Strict disc verification**: Redump hash table and clear rejection of mismatched images (`tools/verify-disc` + `psxrecomp`).
+4. **Verifiable releases**: version comes from the git tag; `SHA256SUMS` published with every release.
+5. **High FPS via interpolation** rather than duplicating the game loop: logic stays bit-identical to PS1.
+6. **Regression testing**: replays + logical state comparison so enhancements never alter gameplay logic.
+7. **Open RE knowledge**: verified symbols and C structs published in `re/`.
 
 ---
 
-## 4. Estructura del repositorio
+## 4. Repository Structure
 
 ```
 crash2-native/
-├── psxrecomp/                 # submódulo: mstan/psxrecomp (PolyForm NC)
-├── recomp-ui/                 # submódulo: launcher nativo de psxrecomp
-├── game.toml                  # configuración del juego (runtime, video, widescreen)
-├── seeds/                     # inicios de funciones (exportados desde Ghidra)
+├── psxrecomp/                 # submodule: mstan/psxrecomp (PolyForm NC 1.0.0)
+├── recomp-ui/                 # submodule: native launcher for psxrecomp (MIT)
+├── game.toml                  # game config (runtime, video, Redump digests)
+├── seeds/                     # verified function starts for static recompilation
 ├── CMakeLists.txt
-├── src/                       # NUESTRO código: hooks, interpolación, widescreen
+├── src/                       # OUR code: setup host, menu provider, hooks, interpolation, widescreen
 ├── patches/
-│   └── psxrecomp/             # cambios al framework, como parches (candidatos a upstream)
-├── re/                        # conocimiento de ingeniería inversa (SÍ se publica)
-│   ├── provisional_symbols.csv # propuestas del agente, sin verificar (diff revisable)
-│   ├── symbols.csv            # solo lo verificado por el humano, con módulo y evidencia
-│   ├── structs.h              # estructuras confirmadas (Camera, Entity, ...)
-│   ├── NOTES.md               # confirmado / descartado / pendiente, con fecha
-│   └── experiments/           # .gdb / .lua con precondición y criterios + resúmenes
+│   └── psxrecomp/             # patches to the framework (upstream candidates)
+├── re/                        # reverse engineering knowledge (published)
+│   ├── provisional_symbols.csv # unverified proposals (reviewable diff)
+│   ├── symbols.csv            # human-verified symbols with module & evidence
+│   ├── structs.h              # confirmed C structs (GoolObject, CameraTransformBlock, DisplayContext, PadState)
+│   ├── NOTES.md               # confirmed / discarded / open log (with NOTES.es.md)
+│   └── experiments/           # .gdb / .lua with preconditions & criteria + summaries
 ├── tools/
-│   ├── ghidra/                # scripts: exportar seeds, importar symbols.csv
-│   ├── verify-disc/           # (Rust) verificador de imágenes contra Redump
-│   └── regress/               # (Rust) replays y comparación de estado
+│   ├── ghidra/                # scripts: sync read-only mirror, export/import helpers
+│   ├── verify-disc/           # (Rust) standalone Redump disc image verifier
+│   └── regress/               # (Rust) replay & logical state regression tool
 ├── scripts/
-│   ├── setup.sh               # dependencias y submódulos
-│   ├── build_linux.sh         # generar + compilar
-│   └── gdb-psx                # GDB conectado a PCSX-Redux, con timeout y detach
+│   ├── setup.sh               # dependencies, submodules, patches, disc check
+│   ├── build_linux.sh         # generate + build
+│   ├── respaldar_partidas.sh  # timestamped verified save backups
+│   └── gdb-psx                # GDB wrapper for PCSX-Redux with timeout & auto-resume
 ├── packaging/
-│   └── appimage/              # AppRun, .desktop, ícono, build-appimage.sh
+│   └── appimage/              # AppRun, .desktop, icon, build-appimage.sh, CHECK_FINDINGS.md
 ├── .github/workflows/
-│   ├── ci.yml                 # cada push/PR: compilar herramientas, pruebas
-│   └── release.yml            # cada etiqueta v*: AppImage + SHA256SUMS
-├── docs/                      # ROADMAP.md (este archivo), BUILDING.md, ...
-├── LICENSE                    # licencia de NUESTRO código
-├── NOTICE                     # avisos de terceros (PolyForm NC, OpenBIOS, SDL3, Zig)
-├── README.md
-├── AGENTS.md                  # reglas comunes de los agentes
-├── CLAUDE.md                  # rol de Claude Code: infraestructura
-├── GEMINI.md                  # rol de Antigravity: ingeniería inversa
+│   ├── ci.yml                 # push/PR: setup-host build, tools, syntax & hygiene checks
+│   └── release.yml            # v* tags / dispatch: AppImage + SHA256SUMS
+├── docs/                      # ROADMAP.md (this file) + ROADMAP.es.md
+├── LICENSE                    # MIT license for our code (+ PolyForm NC notice)
+├── NOTICE                     # third-party attributions (PolyForm NC, OpenBIOS, SDL3, Zig, etc.)
+├── README.md                  # project overview & quickstart (+ README.es.md)
+├── AGENTS.md                  # common agent rules (+ AGENTS.es.md)
+├── CLAUDE.md                  # infrastructure role (+ CLAUDE.es.md)
+├── GEMINI.md                  # reverse engineering role (+ GEMINI.es.md)
 │
-│   # --- Nunca en git (.gitignore, rutas ancladas y sin / final: /ghidra, /disc) ---
-├── disc -> ../privado/disc     # enlace simbólico al disco
-├── generated/                 # C generado a partir del juego
-├── build/  build-release/
-└── ghidra                     # ignorado por seguridad (el proyecto vive en ../privado/ghidra)
+│   # --- Never in git (.gitignore, root-anchored without trailing /: /ghidra, /disc) ---
+├── disc -> ../privado/disc     # symlink to legal disc image
+├── saves -> ../privado/partidas
+├── generated/                 # C generated from the game disc
+├── build/  build-release/  build-setup/
+└── ghidra                     # ignored (Ghidra project lives in ../privado/ghidra)
 ```
 
----
-
-### Ubicación en disco
+### Disk Layout
 
 ```
 ~/Descargas/PORTS/Crash2CSB/
-├── crash2-native/        # repo principal (rama main)
-├── c2-infra/             # worktree de Claude Code
-├── c2-re/                # worktree de Antigravity
-└── privado/              # NUNCA en git
-    ├── disc/             # .bin + .cue verificados contra Redump
-    ├── exe/              # SCUS_941.54 y SYSTEM.CNF
-    ├── ghidra/           # proyecto de Ghidra "crash2" (respaldar en el disco externo)
-    └── emu/              # estados de guardado y memory cards de PCSX-Redux
+├── crash2-native/        # main repo (main branch)
+├── c2-infra/             # infrastructure worktree
+├── c2-re/                # reverse engineering worktree
+└── privado/              # NEVER in git
+    ├── disc/             # Redump-verified .bin + .cue
+    ├── exe/              # SCUS_941.54 and SYSTEM.CNF
+    ├── ghidra/           # Ghidra project "crash2"
+    └── emu/              # PCSX-Redux save states and memory cards
 ```
 
-`crash2-native/disc` y `c2-infra/disc` son enlaces simbólicos a `../privado/disc`.
+### Reference Disc (Redump)
 
-### Disco de referencia (Redump)
-
-| Campo | Valor |
+| Field | Value |
 |---|---|
-| Serial | SCUS-94154 (ediciones Original y Greatest Hits) |
-| Tamaño | 192,814,608 bytes (81,979 sectores, 1 pista) |
+| Serial | `SCUS-94154` (Original and Greatest Hits editions) |
+| Size | `192,814,608` bytes (`81,979` sectors, 1 track) |
 | CRC-32 | `395c0916` |
 | MD5 | `3c31b5e038f025098a2fdfa70c8213f2` |
 | SHA-1 | `3d37fe4288a83b01f1a0edbf78e76e0fede6bc22` |
@@ -126,116 +126,105 @@ crash2-native/
 
 ---
 
-## 5. Herramientas
+## 5. Toolchain
 
-| Herramienta | Para qué | Instalación (Arch) |
+| Tool | Purpose | Arch Linux Package / Source |
 |---|---|---|
-| psxrecomp + recomp-ui | Recompilador, runtime, launcher | submódulos de git |
-| clang/gcc, CMake, Ninja, Python 3 | Compilar y generar | `pacman -S clang cmake ninja python` |
-| Zig | Compilador portable para el AppImage; `-target x86_64-linux-gnu.2.28` | `pacman -S zig` |
-| Ghidra + ghidra_psx_ldr | Análisis estático; cargador PSX y firmas de PsyQ | `pacman -S ghidra` + plugin de lab313ru |
-| REA o GhidraMCP / pyghidra-mcp | Conectar el agente a Ghidra por MCP | según su documentación |
-| PCSX-Redux | Emulador con depurador, servidor GDB y consola Lua (registrar datos de varios cuadros sin pausar) | AppImage o AUR |
-| GDB (+ `scripts/gdb-psx`) | Depuración remota del juego; scripts en modo `-batch` con timeout | `pacman -S gdb` |
-| mcp_server_gdb (opcional) | El agente controla GDB por MCP | release binario (pansila) |
-| distrobox + Podman | Contenedor Ubuntu 22.04 para builds compatibles | `pacman -S distrobox podman` |
-| act | Probar workflows de GitHub Actions en local | `pacman -S act docker` |
-| appimagetool | Empaquetar el AppImage | release de AppImage/appimagetool |
-| Rust (cargo) | Herramientas propias: verify-disc, regress | `pacman -S rustup` |
+| `psxrecomp` + `recomp-ui` | Recompiler, runtime, launcher | git submodules |
+| `clang`/`gcc`, CMake, Ninja, Python 3 | Build and codegen | `pacman -S clang cmake ninja python` |
+| Zig | Portable compiler for AppImage; `-target x86_64-linux-gnu.2.28` | `pacman -S zig` |
+| Ghidra + `ghidra_psx_ldr` | Static analysis; PSX loader & PsyQ signatures | `pacman -S ghidra` + lab313ru plugin |
+| `pyghidra-mcp` | Read-only MCP access to Ghidra project copy | `pyghidra-mcp==0.3.0` |
+| PCSX-Redux | Emulator with debugger, GDB server, and Lua console | AppImage or AUR |
+| GDB (`+ scripts/gdb-psx`) | Remote debugging in `-batch` mode with timeout | `pacman -S gdb` |
+| Docker / Podman | Clean `ubuntu:22.04` container validation | `pacman -S docker` / `podman` |
+| Rust (`cargo`) | Project tools: `verify-disc`, `regress` | `pacman -S rustup` |
 
 ---
 
-## 6. Fases
+## 6. Phases
 
-### Fase 0 — Preparación
-- [ ] Resolver el kernel panic: descargar módulos de VirtualBox mientras trabajas; si persiste, probar `linux-lts`.
-- [ ] Verificar el disco: serial `SCUS-94154` y hash contra Redump.
-- [ ] Leer en psxrecomp: `docs/EXECUTION_MODEL.md`, `ARCHITECTURE.md`, `BUILDING.md`, `GAME_PROJECT_SETUP.md`.
-- [ ] Decidir la licencia de nuestro código (p. ej. MIT) y redactar `NOTICE`.
+### Phase 0 — Preparation
+- [x] Verify disc: serial `SCUS-94154` and hashes against Redump.
+- [x] Read `psxrecomp` docs (`EXECUTION_MODEL.md`, `ARCHITECTURE.md`, `BUILDING.md`, `GAME_PROJECT_SETUP.md`, `config_schema.md`).
+- [x] Decide project license (MIT) and draft `NOTICE`.
 
-**Listo cuando:** entorno instalado y disco verificado.
+**Done when:** environment is set up and disc is verified.
 
-### Fase 1 — Aprender con una plantilla
-- [ ] Clonar y compilar **Hercules Recompiled** en Linux.
-- [ ] Entender su `game.toml`, sus seeds, sus parches y su CMake.
+### Phase 1 — Template & Base Project
+- [x] Study Hercules Recompiled (`game.toml`, seeds, patches, CMake) as reference.
+- [x] Set up repository structure, submodules, `scripts/setup.sh`, and `scripts/build_linux.sh`.
 
-**Listo cuando:** Hércules corre en tu Arch y sabes qué hace cada archivo.
+**Done when:** build system structure is ready and verified.
 
-### Fase 2 — Crash 2 arranca (30 FPS)
-- [ ] Crear el repo con la estructura de la sección 4 y los submódulos.
-- [ ] `game.toml` mínimo para SCUS-94154; seeds iniciales.
-- [ ] `scripts/build_linux.sh`: generar + compilar.
-- [ ] Llegar a la pantalla de título; luego, jugar el primer nivel.
+### Phase 2 — Crash 2 Boots (30 FPS)
+- [x] Minimal `game.toml` for `SCUS-94154` and initial seeds.
+- [x] Integrate `recomp-ui` launcher, in-game menu (`src/menu_provider.c`), and setup wizard (`src/codegen_setup.c`).
+- [x] Boot and play on Linux at 30 FPS with `803` seeds.
 
-**Listo cuando:** se juega un nivel completo a 30 FPS en Linux.
+**Done when:** Crash 2 runs and plays a level at 30 FPS on Linux.
 
-### Fase 3 — Ingeniería inversa
-- [ ] Proyecto de Ghidra con ghidra_psx_ldr y firmas PsyQ.
-- [ ] Desde funciones conocidas (`SetGeomScreen`, `DrawOTag`, `VSync`): encontrar cámara, recorte, bucle principal y lista de objetos.
-- [ ] Para cada dirección, determinar si es del ejecutable principal o de un overlay.
-- [ ] Análisis dinámico con PCSX-Redux + `gdb-psx` (con timeout) y scripts Lua para observar varios cuadros.
-- [ ] Propuestas del agente en `re/provisional_symbols.csv`; el humano promueve a `symbols.csv` y aplica en Ghidra.
-- [ ] Mejorar seeds (menos intérprete, más código nativo).
-- [ ] Publicar `re/symbols.csv` y `re/structs.h`; compartir con crash2-decomp.
+### Phase 3 — Reverse Engineering
+- [x] Ghidra project with `ghidra_psx_ldr` and PsyQ 4.0 signatures.
+- [x] Map PsyQ functions (`SetGeomScreen`, `DrawOTag`, `PutDispEnv`, `PutDrawEnv`, `VSync`, `CdRead`) and cross-references.
+- [x] Map CD loading (`.NSD`/`.NSF` paging) and dynamic native MIPS blocks inside `GOOL` (`type == 11`, `sec[1]`, `0x8003aad4`).
+- [x] Verify main 30 Hz timing loop, camera update, `512x216` (`y=12`) clipping, three `5/8` GTE scaling paths, active entity traversal (`gool_root_buckets` / `GoolObject`), `PadState`, and `RNG` (`001`–`008`).
+- [x] Promote 60 confirmed symbols to `re/symbols.csv`, create `re/structs.h`, and expand `seeds/ghidra_funcs.txt` (`803` unique seeds).
 
-**Listo cuando:** cámara, recorte y bucle principal están verificados en el emulador.
+**Done when:** camera, clipping, and main loop/entities are verified in the emulator.
 
-### Fase 4 — Infraestructura
-- [ ] `tools/verify-disc` (Rust): hashes de Redump y rechazo de imágenes incorrectas.
-- [ ] `ci.yml`: compilar en `container: ubuntu:22.04`; pruebas.
-- [ ] AppImage con Zig, datos del usuario en `~/.local/share/crash2-native/`.
-- [ ] `release.yml`: versión desde la etiqueta, AppImage + `SHA256SUMS`.
+### Phase 4 — Infrastructure
+- [x] `tools/verify-disc` (Rust): Redump hashes and bad-image rejection.
+- [x] `ci.yml`: `container: ubuntu:22.04` disc-less build and tests.
+- [x] AppImage with Zig `0.17.1`, trimmed CMake, Ninja, `tomli`, pinned `type2-runtime`, user data in `~/.local/share/crash2-native/`.
+- [x] `release.yml`: tag-driven version, AppImage + `SHA256SUMS`.
+- [ ] Run remote `ci.yml` and `release.yml` (`workflow_dispatch` / `v0.1.0`) on GitHub Actions and verify on Arch + Ubuntu 22.04.
 
-**Listo cuando:** una etiqueta `v0.1.0` produce un AppImage que corre en Arch y en Ubuntu 22.04.
+**Done when:** tag `v0.1.0` produces an AppImage on GitHub Actions that runs on Arch and Ubuntu 22.04.
 
-### Fase 5 — Pantalla ancha
-- [ ] Recortar la franja negra superior e inferior.
-- [ ] Técnica "abrir poco y estirar" (reimplementada, no copiada).
-- [ ] Después, nivel por nivel: ampliar el recorte de verdad donde el escenario lo permita.
+### Phase 5 — Widescreen
+- [ ] Crop top and bottom 12-line black borders (`DRAWENV` `512x216` at `y=12`).
+- [ ] Reimplement "open camera slightly and stretch slightly" cleanly, preserving `5/8` GTE vertical scaling across all three confirmed paths.
+- [ ] Later, level by level: widen true projection/culling where level geometry permits.
 
-### Fase 6 — FPS altos por interpolación
-- [ ] Guardar posiciones de cámara y objetos en cada tick de lógica (30 Hz).
-- [ ] Interpolar al dibujar (60/120/144 Hz).
-- [ ] Verificar con `tools/regress` que la lógica queda idéntica.
+### Phase 6 — High FPS via Interpolation
+- [ ] Capture camera and active entity transforms (`gool_root_buckets`) on each 30 Hz logic tick.
+- [ ] Interpolate on draw (60/120/144 Hz).
+- [ ] Verify bit-identical logic against stock execution with `tools/regress`.
 
-### Fase 7 — Pruebas, release y contribución
-- [ ] Replays de varios niveles como pruebas de regresión locales.
-- [ ] Release público.
-- [ ] Parches útiles del framework propuestos a mstan/psxrecomp.
+### Phase 7 — Regression Testing, Release & Upstream Contributions
+- [ ] Level replays as local logical-state regression tests.
+- [ ] Public release.
+- [ ] Propose useful framework patches (`patches/psxrecomp/`) upstream to `mstan/psxrecomp`.
 
 ---
 
-## 7. Trabajo con dos agentes
+## 7. Two-Agent Workflow
 
-| | Claude Code | Antigravity |
+| | Claude Code / Infra | Antigravity / RE |
 |---|---|---|
-| Rol | Infraestructura | Ingeniería inversa |
-| Worktree / rama | `../c2-infra`, `infra/...` | `../c2-re`, `re/...` |
-| Recurso exclusivo | Compilación local | Emulador + servidor GDB |
-| Reglas | `CLAUDE.md` (importa `AGENTS.md`) | `GEMINI.md` + `AGENTS.md` |
+| Role | Infrastructure | Reverse Engineering |
+| Worktree / branch | `../c2-infra`, `infra/...` | `../c2-re`, `re/...` |
+| Exclusive resource | Local builds | Emulator + GDB server |
+| Rules | `CLAUDE.md` (imports `AGENTS.md`) | `GEMINI.md` + `AGENTS.md` |
 
-```bash
-git worktree add ../c2-infra -b infra/inicio
-git worktree add ../c2-re    -b re/inicio
-```
-
-Tareas en GitHub Issues (`agente:claude`, `agente:agy`). El humano integra los PR en `main` y es el único que
-escribe en los archivos de "verdad" (`symbols.csv`, `structs.h`, `seeds/`, reglas).
+Tasks live in GitHub Issues (`agente:claude`, `agente:agy`). The human merges
+PRs into `main` and owns the canonical truth files (`symbols.csv`, `structs.h`,
+`seeds/`, rules).
 
 ---
 
-## 8. Riesgos y dudas abiertas
+## 8. Open Risks and Mitigations
 
-| Riesgo | Mitigación |
+| Risk | Mitigation |
 |---|---|
-| Crash 2 puede necesitar arreglos específicos del runtime que aún no conocemos | Fase 3 + leer las ideas de las notas de Crash2Recomp (sin copiar código) |
-| La GPU simulada de psxrecomp limita la pantalla ancha completa | Empezar con "abrir poco y estirar"; extender el renderizador como trabajo upstream |
-| No está confirmado que la generación de psxrecomp funcione con `zig cc` | Probarlo pronto (Fase 4); si no, pedir clang/gcc del sistema como hace RE3 |
-| No sé si el juego necesita el disco al jugar (streaming) | Comprobarlo en la Fase 2 |
-| El agente de IA puede equivocarse con seguridad | Nada se da por cierto sin verificación en el emulador; el agente no escribe en Ghidra (ver CLAUDE.md) |
-| El MCP de Ghidra puede ser de solo lectura (REA) | Las propuestas van a `re/provisional_symbols.csv`; un script de `tools/ghidra/` las importa cuando el humano decide |
-| Un breakpoint que nunca salta cuelga `gdb -batch` | `gdb-psx` con timeout y detach; cada experimento declara precondición y criterio de fallo |
-| Overlays: la misma dirección contiene código distinto según el nivel | Columna `module` en los CSV; verificar qué está cargado antes de poner breakpoints |
-| Pantalla ancha o interpolación alteran la lógica sin notarlo | `tools/regress` compara estado lógico (posiciones, entidades, RNG, contadores), no imagen |
-| Código del juego enviado al proveedor del modelo | Decisión consciente; revisar términos; nunca publicar la base de Ghidra |
-| Licencia PolyForm NC | El proyecto es y será gratuito; sin donaciones ligadas a los binarios |
+| Runtime fixes needed specifically for Crash 2 | Phase 3 findings + framework patches in `patches/psxrecomp/` |
+| `psxrecomp` GPU constraints for full native widescreen | Start with slight FOV + crop/stretch respecting `5/8` aspect paths; extend renderer upstream if needed |
+| `zig cc` compatibility with generated C / host headers | Verified in `infra/appimage-check` (`0001`/`0002` patches + minimal X11/GL/ALSA headers); system compiler fallback kept (`CRASH2NATIVE_USE_SYSTEM_CC=1`) |
+| Disc streaming during gameplay | Verified in `005`: `.NSF` pages stream continuously via `CdRead` async state machine |
+| AI agent makes confident mistakes | Nothing trusted without emulator verification; agents cannot edit Ghidra |
+| Read-only Ghidra MCP | Proposals go to `re/provisional_symbols.csv`; human promotes and syncs |
+| Unhit breakpoint hangs `gdb -batch` | `gdb-psx` uses `timeout`, fast connect abort, and `$c#63` resume; experiments declare preconditions and failure criteria |
+| Dynamic MIPS code inside `GOOL` `.NSF` chunks (`sec[1]`) | Identified in `006` (`0x8003aad4`); `AppRun` bundles `tomli` + `zig-cc` for runtime overlay recompilation |
+| Widescreen or interpolation silently alters logic | `tools/regress` compares logical state (`PadState`, `RNG`, `GoolObject`, counters), never pixels |
+| PolyForm NC license | Project is and remains free and strictly noncommercial |

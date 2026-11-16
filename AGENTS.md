@@ -1,160 +1,202 @@
-# AGENTS.md — crash2-native (reglas comunes para todos los agentes)
+English | [Español](AGENTS.es.md)
 
-Este archivo lo leen Claude Code (vía `CLAUDE.md`) y Antigravity. Cada agente tiene además su rol
-en su propio archivo: `CLAUDE.md` (infraestructura) y `GEMINI.md` (ingeniería inversa).
+# AGENTS.md — crash2-native (common rules for all agents)
 
-Port nativo para Linux de Crash Bandicoot 2 (PS1, `SCUS-94154`) sobre **psxrecomp**.
-El mapa completo, las fases y el porqué de cada decisión están en `docs/ROADMAP.md`.
-Lee ese archivo al empezar una sesión si la tarea no es trivial.
+This file is read by Claude Code (via `CLAUDE.md`) and Antigravity. Each agent
+also has its specific role in its own file: `CLAUDE.md` (infrastructure) and
+`GEMINI.md` (reverse engineering).
 
-## Reglas que nunca se rompen
+Native Linux port of *Crash Bandicoot 2: Cortex Strikes Back* (PS1, `SCUS-94154`)
+built on **psxrecomp**. The full roadmap, phases, and rationale for every
+decision are in `docs/ROADMAP.md`. Read that file at the start of a session for
+any non-trivial task.
 
-1. **Nada del juego entra a git.** Ni imágenes de disco, ni ejecutables extraídos, ni C generado (`generated/`),
-   ni proyectos de Ghidra (`ghidra/`), ni memory cards, ni estados de guardado, ni capturas de memoria.
-   Antes de cada commit, revisa `git status`. Si aparece algo así, detente y avisa.
-2. **Clean-room respecto a Crash2Recomp (Zumbo06).** Su repo no tiene licencia. No copies su código, ni sus
-   offsets, direcciones, estructuras o constantes. Puedes leer sus notas de versión para saber *qué* problemas
-   existen; todo dato que entre a `re/` debe haberse observado y verificado de forma independiente en SCUS-94154
-   con Ghidra y PCSX-Redux.
-3. **psxrecomp es PolyForm Noncommercial 1.0.0.** Conserva sus avisos. Nada comercial.
-4. **No se modifica `psxrecomp/` directamente.** Los cambios al framework van como parches en
-   `patches/psxrecomp/`, explicados en el mensaje del commit. Si el cambio es genérico, márcalo como candidato a upstream.
-5. **Nada es cierto hasta verificarse en el juego.** Ver "Ingeniería inversa" abajo.
-6. **El disco del usuario solo se lee.** Nunca se modifica.
+## Unbreakable Rules
 
-## Mapa del repo
+1. **Nothing from the game enters git.** No disc images, no extracted
+   executables, no generated C (`generated/`), no Ghidra projects (`ghidra/`),
+   no memory cards, no save states, and no memory dumps. Before every commit,
+   check `git status`. If anything like that appears, stop and report it.
+2. **Clean-room regarding Crash2Recomp (Zumbo06).** Its repository has no
+   license. Do not copy its code, offsets, addresses, structures, or constants.
+   You may read its release notes to know *what* problems exist; every fact
+   added to `re/` must be independently observed and verified on `SCUS-94154`
+   with Ghidra and PCSX-Redux.
+3. **psxrecomp is PolyForm Noncommercial 1.0.0.** Preserve its notices. No
+   commercial use.
+4. **Do not modify `psxrecomp/` directly.** Framework changes go as patches in
+   `patches/psxrecomp/`, explained in the commit message. If a change is
+   generic, mark it as an upstream candidate.
+5. **Nothing is true until verified in the game.** See "Reverse Engineering"
+   below.
+6. **The user's disc is read-only.** Never modify it.
 
-| Ruta | Contenido | ¿En git? |
+## Repository Map
+
+| Path | Contents | In git? |
 |---|---|---|
-| `psxrecomp/`, `recomp-ui/` | Submódulos del framework | sí (como submódulo) |
-| `game.toml`, `seeds/`, `CMakeLists.txt` | Configuración del juego | sí |
-| `src/` | Nuestro código: hooks, interpolación, widescreen | sí |
-| `patches/psxrecomp/` | Cambios al framework | sí |
-| `re/provisional_symbols.csv` | Propuestas del agente, sin verificar | sí |
-| `re/symbols.csv`, `re/structs.h` | Solo datos verificados por el humano | sí |
-| `re/NOTES.md`, `re/experiments/` | Bitácora y experimentos (`.gdb`, `.lua`, resúmenes) | sí |
-| `tools/` | `ghidra/` (scripts), `verify-disc/` y `regress/` (Rust) | sí |
-| `scripts/` | `setup.sh`, `build_linux.sh`, `gdb-psx` | sí |
-| `packaging/appimage/` | AppRun, .desktop, ícono, script de empaquetado | sí |
-| `.github/workflows/` | `ci.yml`, `release.yml` | sí |
-| `/disc` (enlace), `/generated`, `/build*`, `/ghidra` | Datos del juego y resultados | **no** |
+| `psxrecomp/`, `recomp-ui/` | Framework submodules | yes (as submodules) |
+| `game.toml`, `seeds/`, `CMakeLists.txt` | Game configuration and seeds | yes |
+| `src/` | Our code: hooks, interpolation, widescreen, setup/menu | yes |
+| `patches/psxrecomp/` | Patches to the framework | yes |
+| `re/provisional_symbols.csv` | Unverified agent proposals | yes |
+| `re/symbols.csv`, `re/structs.h` | Human-verified data only | yes |
+| `re/NOTES.md`, `re/experiments/` | Reverse-engineering log and experiments (`.gdb`, `.lua`, summaries) | yes |
+| `tools/` | `ghidra/` (scripts), `verify-disc/` and `regress/` (Rust) | yes |
+| `scripts/` | `setup.sh`, `build_linux.sh`, `gdb-psx`, `respaldar_partidas.sh` | yes |
+| `packaging/appimage/` | `AppRun`, `.desktop`, icon, packaging script | yes |
+| `.github/workflows/` | `ci.yml`, `release.yml` | yes |
+| `README.md`, `LICENSE`, `NOTICE`, `docs/` | Project documentation and legal notices | yes |
+| `/disc` (symlink), `/generated`, `/build*`, `/ghidra` | Game data and build outputs | **no** |
 
-El `.gitignore` ancla esas rutas a la raíz y sin barra final (`/ghidra`, no `ghidra/`): así no ignora por
-accidente `tools/ghidra/` y sí ignora los enlaces simbólicos. Si agregas una ruta ignorada, sigue el mismo formato.
+`.gitignore` anchors those paths to the root with no trailing slash (`/ghidra`,
+not `ghidra/`), so it does not accidentally ignore `tools/ghidra/` while still
+ignoring symlinks. Follow the same format when adding ignored paths.
 
-### Ubicación en disco
+### Disk Layout
 
 ```
 Crash2CSB/
-├── crash2-native/   # repo, rama main (humano)
-├── c2-infra/        # worktree de Claude
-├── c2-re/           # worktree de Antigravity
-└── privado/         # fuera de git: disc/, exe/ (SCUS_941.54), ghidra/ (proyecto), emu/
+├── crash2-native/   # repository, main branch (human)
+├── c2-infra/        # Claude / Infra worktree
+├── c2-re/           # Antigravity / RE worktree
+└── privado/         # outside git: disc/, exe/ (SCUS_941.54), ghidra/ (project), emu/
 ```
 
-`disc` dentro del repo es un enlace simbólico a `../privado/disc`. Nunca copies datos de `privado/` al repo.
-El ejecutable para análisis está en `../privado/exe/SCUS_941.54`.
+`disc` inside the repo is a symlink to `../privado/disc`. Never copy data from
+`privado/` into the repo. The executable for static analysis is at
+`../privado/exe/SCUS_941.54`.
 
-## Comandos
+## Commands
 
 ```bash
-scripts/setup.sh                       # submódulos y dependencias
-scripts/build_linux.sh                 # generar C desde disc/ y compilar
-ninja -C build-release -j2             # recompilar tras un cambio (laptop: pocos jobs)
-export PSX_GDB_PORT=<puerto>          # el que muestre PCSX-Redux en su configuración
-scripts/gdb-psx -batch -x re/experiments/<exp>.gdb   # experimento contra PCSX-Redux (con timeout)
-PSX_GDB_TIMEOUT=60 scripts/gdb-psx -batch -x ...     # más tiempo si el experimento lo requiere
+scripts/setup.sh                       # submodules and dependencies
+scripts/build_linux.sh                 # generate C from disc/ and compile
+ninja -C build-release -j2             # rebuild after a change (laptop: few jobs)
+export PSX_GDB_PORT=<port>             # port shown in PCSX-Redux configuration
+scripts/gdb-psx -batch -x re/experiments/<exp>.gdb   # experiment against PCSX-Redux (with timeout)
+PSX_GDB_TIMEOUT=60 scripts/gdb-psx -batch -x ...     # longer timeout if needed
 ```
 
-Hardware de desarrollo: laptop Intel Tiger Lake (4 núcleos, Iris Xe). Usa `-j2` o `-j4`; no lances
-compilaciones paralelas pesadas. Las compilaciones finales las hace GitHub Actions.
+Development hardware: Intel Tiger Lake laptop (4 cores, Iris Xe). Use `-j2` or
+`-j4`; do not launch heavy parallel builds. Final builds run on GitHub Actions.
 
-## Ingeniería inversa: el ciclo obligatorio
+## Reverse Engineering: Mandatory Cycle
 
-Herramientas: Ghidra (con ghidra_psx_ldr; acceso por MCP, que puede ser de solo lectura), PCSX-Redux con su
-servidor GDB y su consola Lua, `scripts/gdb-psx`.
+Tools: Ghidra (with `ghidra_psx_ldr`; MCP access, read-only), PCSX-Redux with
+its GDB server and Lua console, `scripts/gdb-psx`.
 
-**El proyecto de Ghidra lo modifica solo el humano.** El agente no renombra ni comenta dentro de Ghidra, aunque
-la herramienta lo permita. Sus propuestas van a `re/provisional_symbols.csv`, donde quedan como un diff revisable.
+**Only the human modifies the Ghidra project.** Agents must not rename or
+comment inside Ghidra, even if the tool permits it. Proposals go into
+`re/provisional_symbols.csv` as a reviewable diff.
 
-1. **Hipótesis.** Parte de funciones conocidas (PsyQ: `SetGeomScreen`, `DrawOTag`, `VSync`, `CdRead`...) y sigue
-   las referencias cruzadas. Formula una hipótesis concreta: "la función en `0x8002xxxx` actualiza la cámara".
-2. **Ubicación del código.** Antes de cualquier otra cosa, determina si la dirección pertenece al **ejecutable
-   principal** o a un **overlay** cargado en RAM, y en ese caso cuál y en qué momento está cargado. Una misma
-   dirección puede contener código distinto según el nivel o la pantalla.
-3. **Evidencia estática.** Entrega direcciones, referencias cruzadas, el fragmento de pseudocódigo relevante y las
-   constantes. Nunca solo una conclusión.
-4. **Propuesta.** Agrega una fila a `re/provisional_symbols.csv`, con estado `propuesto`.
-5. **Experimento dinámico.** Copia `re/experiments/000-plantilla.gdb` como `NNN-descripcion.gdb` y llena su
-   encabezado: **precondición** (qué estado de guardado cargar o qué pantalla debe estar activa),
-   **hipótesis**, **criterio de éxito** y **criterio de fallo** (incluido "el breakpoint no salta en N segundos").
-   Ejecútalo con `scripts/gdb-psx -batch`, que tiene timeout y reanuda el emulador al terminar.
-   - Para observar varios cuadros seguidos (registrar un valor durante un nivel, por ejemplo), usa un script
-     Lua corto en PCSX-Redux en lugar de breakpoints, para no detener el emulador en cada cuadro.
-   - Antes de escribir en la memoria del juego, pide que se guarde un estado en el emulador.
-   - Guarda junto al script un resumen del resultado (`NNN-descripcion.md`).
-6. **Registro.** Anota en `re/NOTES.md`: fecha, hipótesis, experimento, resultado (confirmado / descartado /
-   dudoso). Actualiza el estado en `provisional_symbols.csv`.
-7. **Promoción.** Solo el humano confirma. Al confirmarse: el humano lo pasa a `re/symbols.csv` con su
-   evidencia, y si aplica a `re/structs.h` y a `seeds/`, y lo aplica en Ghidra (`tools/ghidra/`).
+1. **Hypothesis.** Start from known functions (PsyQ: `SetGeomScreen`, `DrawOTag`,
+   `VSync`, `CdRead`, ...) and follow cross-references. Formulate a concrete
+   hypothesis: "the function at `0x8002xxxx` updates the camera".
+2. **Code location.** Before anything else, determine whether the address
+   belongs to the **main executable** (`main`) or to dynamically loaded RAM
+   blocks/chunks (e.g., `.NSF` `GOOL` type 11), and when it is loaded.
+3. **Static evidence.** Provide addresses, cross-references, relevant
+   pseudocode/disassembly, and constants. Never a conclusion alone.
+4. **Proposal.** Add a row to `re/provisional_symbols.csv` with status
+   `propuesto`.
+5. **Dynamic experiment.** Copy `re/experiments/000-plantilla.gdb` as
+   `NNN-description.gdb` and fill in its header: **precondition** (exact save
+   slot or active screen), **hypothesis**, **success criteria**, and **failure
+   criteria** (including "the breakpoint does not hit within N seconds"). Run it
+   with `scripts/gdb-psx -batch`, which enforces a timeout and resumes the
+   emulator on exit.
+   - To observe multiple consecutive frames (e.g., logging values during
+     gameplay), use a short Lua script in PCSX-Redux instead of stopping every
+     frame with breakpoints.
+   - Before writing to game memory, request a saved state in the emulator.
+   - Save a result summary (`NNN-description.md` + `.es.md`) next to the script.
+6. **Logging.** Record in `re/NOTES.md` (and `re/NOTES.es.md`): date,
+   hypothesis, experiment, result (`confirmado` / `descartado` / `dudoso`).
+   Update `status` in `re/provisional_symbols.csv`.
+7. **Promotion.** Only the human promotes confirmed items: into `re/symbols.csv`
+   with evidence, and if applicable into `re/structs.h`, `seeds/`, and Ghidra
+   (`tools/ghidra/`).
 
-Si una hipótesis no se puede verificar, dilo explícitamente. No rellenes huecos con suposiciones.
+If a hypothesis cannot be verified, state so explicitly. Never fill gaps with
+assumptions.
 
-### Formato de `re/provisional_symbols.csv` y `re/symbols.csv`
+### Format of `re/provisional_symbols.csv` and `re/symbols.csv`
 
 ```
 address,name,module,hypothesis,evidence,experiment,status,date
-0x8002xxxx,camera_update,main,"actualiza la cámara cada tick","xref desde ...","re/experiments/007-camara.gdb",propuesto,2026-11-15
+0x8002xxxx,camera_update,main,"updates camera each tick","xref from ...","re/experiments/007-camara.gdb",propuesto,2026-11-15
 ```
 
-- `module`: `main` o `overlay:<identificador>`.
-- `status`: `propuesto`, `confirmado` o `descartado` (en `symbols.csv` solo `confirmado`).
+- `module`: `main` or `overlay:<identifier>`.
+- `status`: `propuesto`, `confirmado`, or `descartado` (in `symbols.csv`, only
+  `confirmado`).
 
-## Prioridades técnicas
+## Technical Priorities
 
-- **Pantalla ancha:** primero recortar la franja negra superior e inferior; luego "abrir poco la cámara y cerrar
-  el hueco estirando la imagen". No abrir mucho el FOV: los niveles no tienen escenario fuera del área 4:3.
-  Verifica siempre las proporciones (riesgo conocido de imagen estirada verticalmente).
-- **FPS altos:** por **interpolación**. La lógica del juego sigue a 30 Hz; se guardan las posiciones de cámara y
-  objetos en cada tick y se interpola al dibujar. No dupliques el bucle del juego.
-- **Regresión:** `tools/regress` compara el **estado lógico** (posiciones, estado de entidades, RNG, contadores),
-  nunca la imagen, y es independiente de la resolución, el FOV y la interpolación. Con interpolación o pantalla
-  ancha activadas, el estado lógico debe ser **idéntico bit a bit** al de referencia. Si cambia, algo tocó la lógica.
+- **Widescreen:** first crop the top and bottom black bars (`DRAWENV` `512x216`
+  at `y=12`); then "open the camera slightly and close the gap by stretching
+  slightly". Do not widen the FOV too far: levels have no geometry outside the
+  4:3 frustum. Always verify proportions across the confirmed `5/8` GTE scaling
+  paths (known risk of vertically stretched geometry).
+- **High FPS:** via **interpolation**. Game logic remains at 30 Hz; camera and
+  active entity transforms (walked via `gool_root_buckets`, never the flat pool)
+  are captured each tick and interpolated on draw. Do not duplicate the game
+  loop.
+- **Regression:** `tools/regress` compares **logical state** (positions, entity
+  states, RNG, counters), never framebuffer pixels, independent of resolution,
+  FOV, and interpolation. With interpolation or widescreen enabled, logical
+  state must remain **bit-identical** to the reference. If it changes,
+  something altered game logic.
 
-## Empaquetado y CI
+## Packaging and CI
 
-- Releases compilados en `container: ubuntu:22.04` (glibc 2.35). Nunca publiques binarios compilados en el Arch local.
-- El AppImage incluye Zig para compilar el juego en la máquina del usuario; si psxrecomp no funciona con `zig cc`,
-  documéntalo y usa el compilador del sistema.
-- El AppImage es de solo lectura: datos, juego compilado y partidas van en `~/.local/share/crash2-native/`.
-- La versión sale de la etiqueta de git. Cada release publica `SHA256SUMS`.
-- Workflows con `permissions:` mínimos. Versiones de actions fijadas. Descargas verificadas con hash.
-- El CI **no tiene acceso al juego**: compila herramientas y runtime, y corre pruebas que no necesitan el disco.
+- Releases built inside `container: ubuntu:22.04` (glibc 2.35). Never publish
+  binaries built on local Arch Linux.
+- The AppImage bundles Zig (`-target x86_64-linux-gnu.2.28`), trimmed CMake,
+  Ninja, prebuilt emitters, vendored offline archives, and `tomli` to compile
+  the game on the user's machine (with fallback to system compilers if needed).
+- The AppImage is read-only: generated code, builds, caches, and saves live in
+  `~/.local/share/crash2-native/`.
+- Version comes from the git tag. Every release publishes `SHA256SUMS`.
+- Workflows use minimal `permissions:`, SHA-pinned actions, and hash-verified
+  downloads.
+- CI **has no access to the game disc**: it builds tools and setup host, and
+  runs tests that do not require the disc.
 
-## Trabajo con varios agentes
+## Multi-Agent Workflow
 
-| Rol | Agente | Rama / worktree | Puede escribir en |
+| Role | Agent | Branch / Worktree | Can write in |
 |---|---|---|---|
-| Infraestructura | Claude Code | `infra/...` en `../c2-infra` | `scripts/`, `.github/`, `packaging/`, `tools/verify-disc/`, `tools/regress/`, `src/`, `game.toml`, `CMakeLists.txt`, `patches/` |
-| Ingeniería inversa | Antigravity | `re/...` en `../c2-re` | `re/provisional_symbols.csv`, `re/NOTES.md`, `re/experiments/`, `tools/ghidra/` |
-| Humano | — | `main` | `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `docs/ROADMAP.md`, `re/symbols.csv`, `re/structs.h`, `seeds/`, proyecto de Ghidra |
+| Infrastructure | Claude Code | `infra/...` in `../c2-infra` | `scripts/`, `.github/`, `packaging/`, `tools/verify-disc/`, `tools/regress/`, `src/`, `game.toml`, `CMakeLists.txt`, `patches/` |
+| Reverse Engineering | Antigravity | `re/...` in `../c2-re` | `re/provisional_symbols.csv`, `re/NOTES.md`, `re/NOTES.es.md`, `re/experiments/`, `tools/ghidra/` |
+| Human | — | `main` | `AGENTS.md`, `CLAUDE.md`, `GEMINI.md` (+ `.es.md`), `docs/ROADMAP.md` (+ `.es.md`), `README.md` (+ `.es.md`), `LICENSE`, `NOTICE`, `re/symbols.csv`, `re/structs.h`, `seeds/`, Ghidra project |
 
-- **Fuera de tu columna, solo lectura.** Si necesitas un cambio en archivos de otro rol, descríbelo en el issue o
-  en el resumen de tu tarea; no lo hagas tú.
-- **Las tareas viven en GitHub Issues** con etiqueta `agente:claude` o `agente:agy`. Cada issue dice qué archivos
-  se tocan y cuándo está terminado.
-- **Los agentes no se pasan trabajo directamente.** El intercambio ocurre por archivos confirmados por el humano
-  (`re/symbols.csv`, `re/structs.h`) y por los PR que el humano integra en `main`.
-- **Recursos exclusivos:** el emulador y su servidor GDB son del agente de ingeniería inversa (`gdb-psx` además
-  usa un candado). La compilación local pesada es del agente de infraestructura. Nunca dos compilaciones a la vez.
-- **Revisión cruzada:** se puede pedir a un agente que revise el PR del otro y busque contraejemplos. Coincidir no
-  es verificar: la verificación sigue siendo el experimento en el emulador.
-- Mantente actualizado con `git rebase main` antes de abrir un PR.
+- **Outside your column, read-only.** If you need a change in another role's
+  files, describe it in the issue or summary; do not make it yourself.
+- **Tasks live in GitHub Issues** tagged `agente:claude` or `agente:agy`. Each
+  issue states which files are touched and when it is done.
+- **Agents do not hand work directly to each other.** Exchange happens via
+  human-confirmed files (`re/symbols.csv`, `re/structs.h`) and PRs merged into
+  `main` by the human.
+- **Exclusive resources:** the emulator and its GDB server belong to the
+  reverse-engineering agent (`gdb-psx` also uses a lock). Heavy local builds
+  belong to the infrastructure agent. Never run two builds simultaneously.
+- **Cross-review:** an agent may be asked to review the other's PR and search
+  for counterexamples. Agreement is not verification: verification remains an
+  experiment in the emulator.
+- Stay up to date with `git rebase main` before opening a PR.
 
-## Estilo de trabajo
+## Working Style
 
-- Cambios pequeños y enfocados; un tema por commit, mensajes en español claros.
-- Antes de una tarea grande, propón un plan corto y espera confirmación.
-- Si una decisión afecta la licencia, la estructura del repo o el contenido que se publica, pregunta primero.
-- Comentarios y documentación en español; identificadores de código en inglés.
-- Al terminar una tarea: qué cambió, cómo se probó y qué queda pendiente.
+- Small, focused changes; one topic per commit, clear commit messages.
+- Before a large task, propose a short plan and wait for confirmation.
+- If a decision affects licensing, repo structure, or published content, ask
+  first.
+- **Language & formatting:** code identifiers, code/script comments, and
+  primary Markdown documentation (`.md`) must be in **English**; `NOTICE` stays
+  English-only. Every `.md` document must have a matching Spanish translation
+  (`<name>.es.md`) in the same directory with a language switcher at the top.
+  **Do not use emojis** anywhere in documentation, comments, or commits.
+- When finishing a task: report what changed, how it was tested, and what
+  remains pending.

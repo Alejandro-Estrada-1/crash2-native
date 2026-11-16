@@ -1,29 +1,29 @@
-# --- Datos del juego y resultados: NUNCA en git ---
-# Rutas ancladas a la raíz (con "/" inicial) para no ignorar por accidente
-# carpetas con el mismo nombre, como tools/ghidra/.
-# SIN "/" final: así también se ignoran si son enlaces simbólicos
-# (disc es un enlace a ../privado/disc).
+# --- Game data and build outputs: NEVER in git ---
+# Paths are root-anchored (leading "/") so folders with the same name
+# elsewhere (such as tools/ghidra/) are not accidentally ignored.
+# No trailing "/": ensures symlinks are ignored as well
+# (disc is a symlink to ../privado/disc).
 /disc
 /generated
 /build
 /build-*
 /ghidra
 
-# Áreas de trabajo de psxrecomp_cli.py con bytes del disco: el ejecutable y
-# SYSTEM.CNF extraídos ([prepare_disc] out_dir), la caché y BIOS locales.
+# psxrecomp_cli.py staging areas containing disc bytes: extracted EXE and
+# SYSTEM.CNF ([prepare_disc] out_dir), caches, and local BIOS dumps.
 /prepared_disc
 /.cache
 /bios
 /saves
 /analysis
 
-# Configuración local del runtime (rutas del usuario)
+# Local runtime config (user paths)
 bios.cfg
 disc.cfg
 rom.cfg
 settings.toml
 
-# Artefactos del runtime al lanzarlo desde la raíz
+# Runtime artifacts written when launched from repo root
 overlay_captures.json
 psx_crash.txt
 psx_last_run_report.json
@@ -32,10 +32,10 @@ psx_freeze_heartbeat.json
 .psxrecomp_last_generate
 .psxrecomp_write_probe
 starvation_dump.jsonl
-# Volcado de probe_disc.py: contiene rutas locales
+# probe_disc.py output: contains local filesystem paths
 /disc_probe.json
 
-# Imágenes de disco y ejecutables extraídos, estén donde estén
+# Disc images and extracted executables anywhere
 *.cue
 *.bin
 *.chd
@@ -46,16 +46,16 @@ starvation_dump.jsonl
 SCUS_*
 SCPH*.BIN
 
-# Proyectos de Ghidra fuera de /ghidra/
+# Ghidra projects outside /ghidra/
 *.gpr
 *.rep/
 
-# Memory cards y estados de guardado del emulador
+# Emulator memory cards and save states
 *.mcd
 *.mcr
 *.sstate
 
-# Varios
+# Misc
 *.AppImage
 __pycache__/
 *.log

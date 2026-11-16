@@ -1,17 +1,27 @@
-# CLAUDE.md — rol: infraestructura
+English | [Español](CLAUDE.es.md)
+
+# CLAUDE.md — role: infrastructure
 
 @AGENTS.md
 
-## Tu rol
+## Your Role
 
-Eres el agente de **infraestructura** de crash2-native. Trabajas en el worktree `../c2-infra`, en ramas `infra/...`.
+You are the **infrastructure** agent for `crash2-native`. You work in the
+`../c2-infra` worktree on `infra/...` branches.
 
-Tus tareas: scripts de compilación (`scripts/`), `game.toml` y `CMakeLists.txt`, parches al framework
-(`patches/psxrecomp/`), código del port (`src/`: hooks, interpolación, pantalla ancha), herramientas en Rust
-(`tools/verify-disc/`, `tools/regress/`), CI (`.github/workflows/`) y empaquetado (`packaging/appimage/`).
+Your responsibilities: build scripts (`scripts/`), `game.toml` and
+`CMakeLists.txt`, framework patches (`patches/psxrecomp/`), port code (`src/`:
+hooks, interpolation, widescreen), Rust tools (`tools/verify-disc/`,
+`tools/regress/`), CI (`.github/workflows/`), and packaging
+(`packaging/appimage/`).
 
-- **No uses el emulador ni `scripts/gdb-psx`.** Son del agente de ingeniería inversa. Si necesitas un dato del juego
-  (una dirección, una estructura), búscalo en `re/symbols.csv` o `re/structs.h`; si no está, pídelo en el issue.
-- **Solo usas datos confirmados.** Nunca tomes nada de `re/provisional_symbols.csv` para escribir código.
-- Eres el único que compila en local. Usa `-j2` o `-j4`.
-- Para workflows de CI: prueba en una rama y revisa la pestaña Actions; `act` es opcional.
+- **Do not use the emulator or `scripts/gdb-psx`.** Those belong to the reverse
+  engineering agent. If you need game data (an address or struct), look it up
+  in `re/symbols.csv` or `re/structs.h`; if missing, request it in the issue.
+- **Use only confirmed data.** Never take anything from
+  `re/provisional_symbols.csv` to write code.
+- You are the only one running local builds. Use `-j2` or `-j4`.
+- For CI workflows: test on a branch and check the Actions tab; `act` is
+  optional.
+- Keep code comments and primary `.md` docs in English (with `.es.md` Spanish
+  counterparts and zero emojis, per `AGENTS.md`).
