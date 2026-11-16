@@ -43,3 +43,11 @@ overlay_cache = true
 [video]
 renderer = "opengl"
 aspect_ratio = "4:3"
+
+[widescreen]
+# Crash 2 geometry lives within the 4:3 frustum; use GTE X-squash (ws_mode = 1)
+# on top of the cropped 512x216 (40:27) base rather than native-wide columns.
+native_wide = false
+# Classify active 3D GTE frames (gameplay, Warp Room, Pause) so OpenBIOS and
+# 24-bit MDEC FMVs remain unstretched at 4:3.
+gte_game_mode = true

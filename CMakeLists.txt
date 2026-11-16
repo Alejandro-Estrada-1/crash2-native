@@ -63,7 +63,7 @@ if(PSX_RECOMP_UI)
 endif()
 
 psxrecomp_add_game_runtime(psx-runtime
-    PRELOADED_MODS_DIR "NONE"
+    PRELOADED_MODS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mods/preloaded"
     WINDOW_TITLE "crash2-native"
     DEFAULT_GAME_CONFIG_PATH "game.toml"
     MAX_PLAYERS 1
@@ -72,11 +72,14 @@ psxrecomp_add_game_runtime(psx-runtime
     ${_crash2_ui_args}
 )
 
-# In-game menu for a single-disc title (see src/menu_provider.c).
-# Compiles to an empty translation unit when recomp-ui is disabled.
+# In-game menu and presentation hooks for a single-disc title (see src/).
+# menu_provider.c compiles empty when recomp-ui is disabled.
 foreach(_crash2_t psx-runtime psx-runtime-pgxp)
     if(TARGET ${_crash2_t})
-        target_sources(${_crash2_t} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/menu_provider.c")
+        target_sources(${_crash2_t} PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/src/menu_provider.c"
+            "${CMAKE_CURRENT_SOURCE_DIR}/src/widescreen.c"
+        )
     endif()
 endforeach()
 

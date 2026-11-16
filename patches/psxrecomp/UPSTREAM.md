@@ -205,3 +205,50 @@ Tested on 2026-11-15 with Zig `0.17.1` (Clang `22.1.8`) against `psxrecomp`
   points to a separate copy, and updates `compiler.txt` with the compiler
   resolved from `PATH`. Without that variable (e.g., `scripts/build_linux.sh`),
   framework behavior is unchanged.
+
+---
+
+## 9. Presentation-only vertical crop for 15-bit CRT overscan borders
+
+- **Where:** `runtime/include/display_scanout.h`, `runtime/include/gpu.h`,
+  `runtime/src/gpu.c`, `runtime/src/gpu_gl_renderer.c`,
+  `runtime/src/gpu_vk_renderer.c`, `runtime/src/main.cpp`.
+- **What happens:** on 15-bit modes, `gpu_get_display_info()` always exposes
+  the full `DispEnv` rectangle and native-aspect presentation paths (`force_4_3`
+  in OpenGL/Vulkan and `640x480` in software SDL) hardcode `4:3` regardless of
+  cropped height. Titles that intentionally render only a centered band inside
+  `DispEnv` (e.g., `512x216` at `y=12` inside `512x240`) keep top/bottom black
+  borders inside `4:3`, and trimming `di.height` alone would vertically stretch
+  `216` lines back into `4:3`.
+- **Local patch (upstream candidate):**
+  [`0003-display-present-crop.patch`](0003-display-present-crop.patch), which
+  adds a generic presentation-only crop hook (`gpu_set_present_crop_callback`
+  and `gpu_apply_present_crop`), derives the exact cropped presentation aspect
+  (`psx_present_cropped_aspect`: `(4 * 240) / (3 * 216) = 40:27`) without altering
+  `gpu_get_display_info()`, `depth24`, VRAM, savestates, or GTE projection, and
+  threads packed per-frame aspect overrides (`psx_present_aspect_pack` /
+  `psx_present_aspect_unpack`) through OpenGL (including render thread,
+  interpolation, hold-last, frame-gen, and CPU fallback), Vulkan, and software
+  SDL while keeping legacy `0`/`1` behavior unchanged when no hook is registered.
+
+---
+
+## 10. Custom GTE squash aspect override for cropped widescreen bases
+
+- **Where:** `runtime/include/gpu.h`, `runtime/src/gpu.c`,
+  `runtime/src/main.cpp`.
+- **What happens:** `refresh_widescreen_projection()` (`runtime/src/main.cpp`)
+  unconditionally feeds the full host aspect (`g_video_aspect_num:g_video_aspect_den`,
+  e.g. `16:9`) directly into `gte_set_display_aspect()` (`squash = 3/4 = 0.75x`)
+  both at game entry and whenever projection state refreshes. Titles whose base
+  active raster starts cropped above `4:3` (e.g., `512x216` at `40:27`) or
+  that require a bounded horizontal FOV opening + subtle residual stretch would
+  otherwise get over-squashed (`0.75 * 1.20 = 0.90x`) and vertically stretched.
+- **Local patch (upstream candidate):**
+  [`0004-widescreen-projection-aspect.patch`](0004-widescreen-projection-aspect.patch),
+  adding an optional projection-aspect override hook
+  (`gpu_set_widescreen_projection_aspect_callback` /
+  `gpu_apply_widescreen_projection_aspect`) inside `refresh_widescreen_projection()`
+  when squash mode (`mode == 1`) is active (leaving `4:3` as identity `1:1`
+  and leaving native-wide `mode == 2` untouched), plus
+  `psx_ws_refresh_projection_live()` for live FOV option updates.

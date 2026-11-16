@@ -1,0 +1,43 @@
+format_version = 11
+id = "crash2.enhancement.widescreen"
+version = "1.0.0"
+name = "Widescreen (16:9)"
+author = "crash2-native"
+description = "16:9 widescreen using controlled GTE horizontal FOV opening over the cropped 512x216 (40:27) image. Keeps 24-bit FMVs and OpenBIOS in 4:3."
+resolver = "declarative"
+save_compatibility = "shared"
+
+[[target]]
+game_id = "SCUS-94154"
+
+[[feature]]
+id = "widescreen"
+name = "Widescreen (16:9)"
+description = "Switch between unstretched 4:3 (cropped 40:27) and 16:9 widescreen with controlled horizontal FOV opening. Leave off for vanilla 4:3 GTE state."
+group = "Visual"
+default_enabled = false
+
+[[option]]
+feature = "widescreen"
+id = "fov_opening"
+label = "Horizontal FOV opening"
+description = "GTE horizontal FOV opening above the cropped 40:27 base (the small remainder to 16:9 uses slight horizontal scaling to protect corridor edges)."
+group = "Visual"
+type = "choice"
+default = "1.125"
+
+[[option.choice]]
+value = "1.125"
+label = "Balanced 1.125x (3:2 GTE, ~6.7% stretch)"
+
+[[option.choice]]
+value = "1.10"
+label = "Conservative 1.10x (22:15 GTE, ~9.1% stretch)"
+
+[[option.choice]]
+value = "1.20"
+label = "Full 1.20x (8:5 GTE, 0% stretch)"
+
+[[plugin]]
+feature = "widescreen"
+id = "crash2.widescreen"
