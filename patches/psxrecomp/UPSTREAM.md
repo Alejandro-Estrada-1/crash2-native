@@ -230,3 +230,25 @@ Tested on 2026-11-15 with Zig `0.17.1` (Clang `22.1.8`) against `psxrecomp`
   `psx_present_aspect_unpack`) through OpenGL (including render thread,
   interpolation, hold-last, frame-gen, and CPU fallback), Vulkan, and software
   SDL while keeping legacy `0`/`1` behavior unchanged when no hook is registered.
+
+---
+
+## 10. Custom GTE squash aspect override for cropped widescreen bases
+
+- **Where:** `runtime/include/gpu.h`, `runtime/src/gpu.c`,
+  `runtime/src/main.cpp`.
+- **What happens:** `refresh_widescreen_projection()` (`runtime/src/main.cpp`)
+  unconditionally feeds the full host aspect (`g_video_aspect_num:g_video_aspect_den`,
+  e.g. `16:9`) directly into `gte_set_display_aspect()` (`squash = 3/4 = 0.75x`)
+  both at game entry and whenever projection state refreshes. Titles whose base
+  active raster starts cropped above `4:3` (e.g., `512x216` at `40:27`) or
+  that require a bounded horizontal FOV opening + subtle residual stretch would
+  otherwise get over-squashed (`0.75 * 1.20 = 0.90x`) and vertically stretched.
+- **Local patch (upstream candidate):**
+  [`0004-widescreen-projection-aspect.patch`](0004-widescreen-projection-aspect.patch),
+  adding an optional projection-aspect override hook
+  (`gpu_set_widescreen_projection_aspect_callback` /
+  `gpu_apply_widescreen_projection_aspect`) inside `refresh_widescreen_projection()`
+  when squash mode (`mode == 1`) is active (leaving `4:3` as identity `1:1`
+  and leaving native-wide `mode == 2` untouched), plus
+  `psx_ws_refresh_projection_live()` for live FOV option updates.

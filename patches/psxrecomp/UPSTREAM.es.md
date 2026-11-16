@@ -212,3 +212,24 @@ emisores en `psxrecomp/recompiler`.
   `psx_present_aspect_unpack`) por OpenGL (hilo de renderizado, interpolación,
   hold-last, frame-gen y ruta CPU), Vulkan y SDL por software manteniendo
   intacto el comportamiento `0`/`1` cuando no hay hook registrado.
+
+---
+
+## 10. Override de relación de proyección GTE sobre bases recortadas
+
+- **Dónde:** `runtime/include/gpu.h`, `runtime/src/gpu.c`,
+  `runtime/src/main.cpp`.
+- **Qué pasa:** `refresh_widescreen_projection()` (`runtime/src/main.cpp`)
+  pasa directamente el aspecto final de pantalla (`g_video_aspect_num:g_video_aspect_den`,
+  p. ej. `16:9`) a `gte_set_display_aspect()` (`squash = 3/4 = 0.75x`) tanto al
+  entrar al juego como al refrescar la proyección. En títulos cuya imagen activa
+  ya parte recortada por encima de `4:3` (p. ej. `512x216` en `40:27`) o que
+  requieren una apertura horizontal acotada + ligero estiramiento residual, esto
+  sobrerrecortaría X (`0.75 * 1.20 = 0.90x`) y estiraría la geometría verticalmente.
+- **Parche local (candidato a upstream):**
+  [`0004-widescreen-projection-aspect.patch`](0004-widescreen-projection-aspect.patch),
+  que añade un hook opcional para ajustar la relación de proyección en modo
+  squash (`mode == 1`) (`gpu_set_widescreen_projection_aspect_callback` /
+  `gpu_apply_widescreen_projection_aspect`) dentro de `refresh_widescreen_projection()`
+  (dejando `4:3` como identidad `1:1` y sin alterar `mode == 2`), además de
+  `psx_ws_refresh_projection_live()` para cambios de opción en vivo.

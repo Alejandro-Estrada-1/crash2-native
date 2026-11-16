@@ -63,7 +63,7 @@ if(PSX_RECOMP_UI)
 endif()
 
 psxrecomp_add_game_runtime(psx-runtime
-    PRELOADED_MODS_DIR "NONE"
+    PRELOADED_MODS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mods/preloaded"
     WINDOW_TITLE "crash2-native"
     DEFAULT_GAME_CONFIG_PATH "game.toml"
     MAX_PLAYERS 1

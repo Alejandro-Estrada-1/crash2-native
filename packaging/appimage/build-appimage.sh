@@ -202,7 +202,7 @@ tar -C "${REPO_ROOT}" \
   --exclude='./.cache' \
   --exclude='*.AppImage' \
   -cf - \
-  psxrecomp recomp-ui src re/structs.h seeds patches CMakeLists.txt game.toml LICENSE NOTICE | tar -C "${SDK_SRC}" -xf -
+  psxrecomp recomp-ui src re/structs.h mods seeds patches CMakeLists.txt game.toml LICENSE NOTICE | tar -C "${SDK_SRC}" -xf -
 
 find "${SDK_SRC}" -name '.git' -exec rm -rf {} + 2>/dev/null || true
 find "${SDK_SRC}" -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
@@ -310,6 +310,7 @@ cp -a \
   "${SDK_SRC}/psxrecomp" \
   "${SDK_SRC}/recomp-ui" \
   "${SDK_SRC}/src" \
+  "${SDK_SRC}/mods" \
   "${SDK_SRC}/seeds" \
   "${SDK_SRC}/patches" \
   "${SDK_SRC}/CMakeLists.txt" \
