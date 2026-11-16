@@ -1,12 +1,10 @@
 # ------------------------------------------------------------------
 # Experimento 006: Codigo MIPS nativo en GOOL (tipo 11, 0x8003aad4) y camara/proyeccion
 #
-# Precondicion:  EJECUTAR DESPUES de integrar el arreglo de scripts/gdb-psx en main y
-#                tras correr el Experimento 005.
-#                PCSX-Redux corriendo (sin pausa) con Crash Bandicoot 2 (SCUS-94154)
-#                cargado en pantalla de titulo (S3/S000003C) o primer nivel (slot 1,
-#                S1/S0000010), con el servidor GDB activo.
-# BIOS:          OpenBIOS (registrada automaticamente cuando scripts/gdb-psx tome el arreglo)
+# Precondicion:  PCSX-Redux corriendo (sin pausa) con Crash Bandicoot 2 (SCUS-94154)
+#                cargado en pantalla de titulo o nivel jugable (p. ej. nivel activo
+#                0x1e de la sesion), con el servidor GDB activo tras correr 005.
+# BIOS:          OpenBIOS (registrada automaticamente por scripts/gdb-psx)
 # Modulo:        main (SCUS_941.54) + chunks GOOL (tipo 11) en paginas NSF en heap RAM
 # Hipotesis:
 #   1. En runtime existen chunks GOOL (tipo 11) cargados dentro de los slots fisicos
@@ -23,11 +21,12 @@
 #        geom_offset_x/y (0x8006cc20/24) y SetGeomOffset centrado en (0x100, 0x6c).
 # Exito:
 #   - Al menos una pagina fisica cargada contiene un chunk GOOL (tipo 11) con sec[1]
-#     que incluye palabras terminadoras MIPS nativas en RAM.
-#   - El tbreak en 0x8003aad4 salta y muestra $pc == 0x8003aad4, $s8 == 0x1f800000 y $s5
-#     apuntando dentro de uno de los buffers fisicos del pool NSF (>= 0x8006f1f4).
-#   - El tbreak en 0x80017f70 (llamada SetGeomOffset en cam_update) muestra
-#     $a0 == 0x100 + geom_offset_x y $a1 == 0x6c + (cam_shake_y >> 8) + geom_offset_y.
+#     que incluye bloques MIPS nativos en RAM.
+#   - El tbreak en 0x8003aad4 salta y muestra $pc == 0x8003aad4, $s8 == 0x1f800000, $s5
+#     apuntando dentro de sec[1] de una pagina NSF residente (>= 0x8006f1f4) e
+#     instrucciones MIPS validas desensambladas desde $s5.
+#   - El tbreak en 0x8004efe8 (SetGeomOffset llamado desde cam_update en 0x80017f70)
+#     muestra $a0 == 0x100 + geom_offset_x y $a1 == 0x6c + (cam_shake_y >> 8) + geom_offset_y.
 # Fallo:
 #   - Ninguna pagina fisica residente contiene tipo 11 con sec[1] MIPS, o bien
 #     $s5 en 0x8003aad4 apunta fuera del heap / a codigo estatico de SCUS_941.54,
@@ -60,7 +59,11 @@ x/8wx 0x80060754
 printf "cam_view_matrix (0x80060774, fila Y escalada -5/8):\n"
 x/8wx 0x80060774
 
+printf "\n[auditoria BSS jalr: DAT_80062a18 (arg2 de FUN_80041e5c -> +0x10 en 0x80041f34)]\n"
+x/10wx 0x80062a18
+
 printf "\n[display_ctx_pool / DispEnv / DrawEnv]\n"
+printf "disp_ctx_count (0x8006344c) = %d\n", *(int *)0x8006344c
 set $front = *(unsigned int *)0x80063450
 set $draw  = *(unsigned int *)0x80063454
 set $work  = *(unsigned int *)0x80063458
@@ -103,42 +106,44 @@ end
 
 printf "\n[verificacion viva 1: salto a MIPS en heap en 0x8003aad4 (gool_op49_exec_mips)]\n"
 tbreak *0x8003aad4
-set $hops = 0
-while ($hops < 10)
+set $hops1 = 0
+set $hit1 = 0
+while ($hops1 < 150 && $hit1 == 0)
   continue
-  if ($pc == 0x8003aad4)
-    set $hops = 99
+  if ((unsigned int)$pc == 0x8003aad4U)
+    set $hit1 = 1
   else
-    if ($pc == 0x80000080)
-      set $hops = $hops + 1
+    if ((unsigned int)$pc == 0x80000080U)
+      set $hops1 = $hops1 + 1
     else
-      set $hops = 99
+      set $hops1 = 999
     end
   end
 end
-printf "hit 0x8003aad4? pc = 0x%08x, s5 = 0x%08x, s0 (obj) = 0x%08x, s8 = 0x%08x, ra = 0x%08x\n", \
-  $pc, $s5, $s0, $s8, $ra
-if ($pc == 0x8003aad4 && $s5 >= 0x80060000U && $s5 < 0x80200000U)
-  printf "primeras instrucciones MIPS en RAM ($s5 = 0x%08x):\n", $s5
-  x/10i $s5
+printf "hit1=%d (hops1=%d) pc = 0x%08x, s5 = 0x%08x, s0 (obj) = 0x%08x, s8 = 0x%08x, ra = 0x%08x\n", \
+  $hit1, $hops1, (unsigned int)$pc, (unsigned int)$s5, (unsigned int)$s0, (unsigned int)$s8, (unsigned int)$ra
+if ((unsigned int)$pc == 0x8003aad4U && (unsigned int)$s5 >= 0x80060000U && (unsigned int)$s5 < 0x80200000U)
+  printf "primeras 16 instrucciones MIPS en RAM ($s5 = 0x%08x):\n", (unsigned int)$s5
+  x/16i (unsigned int)$s5
 end
 
-printf "\n[verificacion viva 2: SetGeomOffset en cam_update (0x80017f70)]\n"
-tbreak *0x80017f70
-set $hops = 0
-while ($hops < 10)
+printf "\n[verificacion viva 2: SetGeomOffset (0x8004efe8) desde cam_update (ra=0x80017f78)]\n"
+tbreak *0x8004efe8
+set $hops2 = 0
+set $hit2 = 0
+while ($hops2 < 150 && $hit2 == 0)
   continue
-  if ($pc == 0x80017f70)
-    set $hops = 99
+  if ((unsigned int)$pc == 0x8004efe8U)
+    set $hit2 = 1
   else
-    if ($pc == 0x80000080)
-      set $hops = $hops + 1
+    if ((unsigned int)$pc == 0x80000080U)
+      set $hops2 = $hops2 + 1
     else
-      set $hops = 99
+      set $hops2 = 999
     end
   end
 end
-printf "hit 0x80017f70? pc = 0x%08x, a0 (OFX) = %d (0x%x), a1 (OFY) = %d (0x%x)\n", \
-  $pc, $a0, $a0, $a1, $a1
+printf "hit2=%d (hops2=%d) pc = 0x%08x, ra = 0x%08x, a0 (OFX) = %d (0x%x), a1 (OFY) = %d (0x%x)\n", \
+  $hit2, $hops2, (unsigned int)$pc, (unsigned int)$ra, $a0, $a0, $a1, $a1
 
 detach
