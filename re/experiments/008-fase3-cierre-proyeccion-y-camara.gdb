@@ -1,34 +1,34 @@
 # ------------------------------------------------------------------
-# Experimento 008: Cierre de Fase 3 — 3ra ruta 5/8 (0x8003d3cc/0x8001bd84),
-#                  proyeccion, cam_mode_dispatch (0x80026ca0) y zone_gfx_mode_apply (0x80020a24)
+# Experiment 008: Phase 3 closure — 3rd 5/8 path (0x8003d3cc/0x8001bd84),
+#                 projection, cam_mode_dispatch (0x80026ca0) and zone_gfx_mode_apply (0x80020a24)
 #
-# Precondicion:  PCSX-Redux corriendo (sin pausa) con Crash Bandicoot 2 (SCUS-94154):
-#                - Nivel con menu de Pausa/HUD visible o texto 3D para draw_text_3d (0x8001bd84)
-#                  y model_view_matrix_build (0x8003d3cc), o
-#                - Pantalla de titulo / cinematica con franjas negras para observar
-#                  letterbox_level != 0 y reduccion proporcional de H en SetGeomScreen.
-# BIOS:          OpenBIOS (registrada automaticamente por scripts/gdb-psx)
-# Modulo:        main (SCUS_941.54)
-# Hipotesis:
-#   1. cam_mode_dispatch (0x80026ca0, desde 0x80011b60) y zone_gfx_mode_apply (0x80020a24,
-#      desde cam_update 0x80017bd8) se ejecutan cada cuadro durante el juego normal
-#      (con DAT_8005b994 == 5, DAT_800608f0 y DAT_80062ad8 / level_flags coherentes).
-#   2. Cuando existe texto 3D/HUD (*anim_seq == 4), gool_render_enqueue encadena a
-#      draw_text_3d (0x8001bd84) -> model_view_matrix_build (0x8003d3cc), donde el bloque
-#      0x8003d8f8..0x8003d94c escala s3/s0/s4 por -(val * 5) >> 3 en la fila Y de GTE.
-#   3. Si hay sprites activos (*anim_seq == 2) o uso del opcode GOOL de proyeccion,
-#      disparan sprite_billboard_draw (0x80044830) y/o world_to_screen (0x8001ed60).
-#   4. Si letterbox_level (0x8006cc94) > 0, draw_letterbox_and_fov (0x80016c58) reduce
+# Precondition:  PCSX-Redux running (unpaused) with Crash Bandicoot 2 (SCUS-94154):
+#                - Level with Pause/HUD menu visible or 3D text for draw_text_3d (0x8001bd84)
+#                  and model_view_matrix_build (0x8003d3cc), or
+#                - Title screen / cutscene with black bars to observe
+#                  letterbox_level != 0 and proportional H reduction in SetGeomScreen.
+# BIOS:          OpenBIOS (automatically recorded by scripts/gdb-psx)
+# Module:        main (SCUS_941.54)
+# Hypothesis:
+#   1. cam_mode_dispatch (0x80026ca0, from 0x80011b60) and zone_gfx_mode_apply (0x80020a24,
+#      from cam_update 0x80017bd8) execute every frame during normal gameplay
+#      (with DAT_8005b994 == 5, DAT_800608f0 and DAT_80062ad8 / level_flags coherent).
+#   2. When 3D/HUD text exists (*anim_seq == 4), gool_render_enqueue chains into
+#      draw_text_3d (0x8001bd84) -> model_view_matrix_build (0x8003d3cc), where block
+#      0x8003d8f8..0x8003d94c scales s3/s0/s4 by -(val * 5) >> 3 in the GTE Y row.
+#   3. If active sprites exist (*anim_seq == 2) or the GOOL projection opcode is used,
+#      sprite_billboard_draw (0x80044830) and/or world_to_screen (0x8001ed60) fire.
+#   4. If letterbox_level (0x8006cc94) > 0, draw_letterbox_and_fov (0x80016c58) reduces
 #      geom_screen (0x80060884) = H_base - (H_base / 24) * letterbox_level via SetGeomScreen.
-# Exito:
-#   - Saltan cam_mode_dispatch (0x80026ca0) y zone_gfx_mode_apply (0x80020a24).
-#   - Al mostrarse texto 3D/HUD, saltan draw_text_3d (0x8001bd84) y model_view_matrix_build
-#     (0x8003d3cc) mostrando en 0x8003d8f8 -> 0x8003d94c la aritmetica exacta -(val*5)>>3.
-#   - Si letterbox_level != 0, se observa H reducida respecto al valor base 288.
-# Fallo:
-#   - Los breakpoints obligatorios no saltan en 5 cuadros / PSX_GDB_TIMEOUT segundos, o la
-#     aritmetica observada en 0x8003d8f8..0x8003d94c no corresponde a -(val*5)>>3.
-# Escribe en memoria: no (solo lectura + breakpoints temporales SW; sin escritura al juego)
+# Success:
+#   - cam_mode_dispatch (0x80026ca0) and zone_gfx_mode_apply (0x80020a24) hit.
+#   - When 3D/HUD text is displayed, draw_text_3d (0x8001bd84) and model_view_matrix_build
+#     (0x8003d3cc) hit showing the exact -(val*5)>>3 arithmetic from 0x8003d8f8 -> 0x8003d94c.
+#   - If letterbox_level != 0, H is observed reduced relative to the base value 288.
+# Failure:
+#   - Required breakpoints do not hit within 5 frames / PSX_GDB_TIMEOUT seconds, or the
+#     arithmetic observed at 0x8003d8f8..0x8003d94c does not match -(val*5)>>3.
+# Writes memory: no (read-only + temporary SW breakpoints; no writes to the game)
 # ------------------------------------------------------------------
 
 set pagination off

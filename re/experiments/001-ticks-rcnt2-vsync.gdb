@@ -1,25 +1,25 @@
 # ------------------------------------------------------------------
-# Experimento 001: Ticks de DAT_8003bea4 entre dos VSync
+# Experiment 001: DAT_8003bea4 ticks between two VSyncs
 #
-# Precondición:  PCSX-Redux con servidor GDB activo y Dynarec desactivado;
-#                cargar un estado guardado en gameplay estable (ej. slot 1:
-#                inicio de Turtle Woods, Crash quieto) o en pantalla de mapa,
-#                donde FUN_8001645c se ejecute de forma continua.
-# Módulo:        main (0x80016840, 0x80016868, 0x80016870, 0x8003bea4)
-# Hipótesis:     DAT_8003bea4 avanza ~17 ticks (0x11) durante un único VSync
-#                (confirmando el supuesto divisor /8 de RCntCNT2 con target
-#                0x1000 en 60 Hz NTSC) y ~34 ticks (0x22) por cuadro de 30 Hz.
-#                Medición pura de 1 VSync: entre el retorno de VSync(0) de
-#                0x80016838 (en 0x80016840) y el retorno del VSync(0) extra de
-#                0x80016868 (en 0x80016870 cuando pasó por 0x80016868).
-# Éxito:         En los cuadros donde salta 0x80016868, delta_1_vsync está
-#                entre 16 y 18 ticks (~17 = 0x11), y delta_frame entre dos
-#                pasadas consecutivas por 0x80016840 es ~34 (0x22).
-# Fallo:         El breakpoint en 0x80016840 no salta en PSX_GDB_TIMEOUT
-#                segundos, o delta_1_vsync difiere claramente de ~17 ticks
-#                (p. ej. ~137 si fuese SysClk/1, ~1-2, o 0 si el contador está
-#                detenido por DAT_8006cb94 & 0x200000).
-# Escribe en memoria: no
+# Precondition:  PCSX-Redux with GDB server active and Dynarec disabled;
+#                load a save state in steady gameplay (e.g. slot 1:
+#                start of Turtle Woods, Crash standing still) or on the map
+#                screen, where FUN_8001645c executes continuously.
+# Module:        main (0x80016840, 0x80016868, 0x80016870, 0x8003bea4)
+# Hypothesis:    DAT_8003bea4 advances ~17 ticks (0x11) during a single VSync
+#                (confirming the assumed /8 divider of RCntCNT2 with target
+#                0x1000 at 60 Hz NTSC) and ~34 ticks (0x22) per 30 Hz frame.
+#                Pure 1-VSync measurement: between the return of VSync(0) at
+#                0x80016838 (at 0x80016840) and the return of the extra VSync(0)
+#                at 0x80016868 (at 0x80016870 when it went through 0x80016868).
+# Success:       On frames where 0x80016868 hits, delta_1_vsync is
+#                between 16 and 18 ticks (~17 = 0x11), and delta_frame between
+#                two consecutive passes through 0x80016840 is ~34 (0x22).
+# Failure:       The breakpoint at 0x80016840 does not hit within
+#                PSX_GDB_TIMEOUT seconds, or delta_1_vsync clearly differs
+#                from ~17 ticks (e.g. ~137 if it were SysClk/1, ~1-2, or 0 if
+#                the counter is halted by DAT_8006cb94 & 0x200000).
+# Writes memory: no
 # ------------------------------------------------------------------
 
 set $frames = 0

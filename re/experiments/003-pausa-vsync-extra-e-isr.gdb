@@ -1,31 +1,31 @@
 # ------------------------------------------------------------------
-# Experimento 003: Menú de pausa — VSync extra (0x80016868) e ISR (0x8003be88)
+# Experiment 003: Pause menu — extra VSync (0x80016868) and ISR (0x8003be88)
 #
-# Precondición:  PCSX-Redux con servidor GDB activo (puerto 3333) y CPU en
-#                intérprete; cargar slot 1 en el primer nivel, pulsar Start
-#                para abrir el menú de pausa y dejar el juego corriendo en el
-#                menú de pausa antes de lanzar este script.
-#                Se recomienda ejecutar con PSX_GDB_TIMEOUT=120 (Fase A de 20
-#                cuadros sin breakpoint en la ISR + Fase B de 3 cuadros con
-#                breakpoint en 0x8003be88, ~125 paradas TCP).
-# Módulo:        main (0x80016838, 0x80016868, 0x8003be88, 0x8003bea4, 0x8006ccf0)
-# Hipótesis:     a) En el menú de pausa (escena más ligera), frame_end_sync
-#                   llega a 0x80016838 en < 1 VSync, de modo que delta < 0x19
-#                   y se ejecuta el VSync(0) extra en 0x80016868.
-#                b) La ISR rcnt2_tick_isr (0x8003be88) se ejecuta ~34–35 veces
-#                   por cuadro de 30 Hz, coincidiendo 1:1 con el incremento de
-#                   rcnt2_tick_count (0x8003bea4) en cada cuadro.
-# Éxito:         - En Fase A (20 cuadros en pausa): se registra hits_6868_a
-#                  (> 0 si la pausa dispara el VSync extra) y delta_tick ≈ 690.
-#                - En Fase B (3 cuadros consecutivos): en cada cuadro,
-#                  hits_isr(0x8003be88) == delta(0x8003bea4) y ronda 34–35.
-# Fallo:         El breakpoint en 0x80016838 o 0x8003be88 no salta en
-#                PSX_GDB_TIMEOUT segundos, o hits_isr(0x8003be88) !=
-#                delta(0x8003bea4) / difiere claramente de ~34.5 por cuadro.
-# Escribe en memoria: no
+# Precondition:  PCSX-Redux with GDB server active (port 3333) and CPU in
+#                interpreter mode; load slot 1 in the first level, press Start
+#                to open the pause menu and leave the game running in the
+#                pause menu before launching this script.
+#                Running with PSX_GDB_TIMEOUT=120 is recommended (Phase A of
+#                20 frames without ISR breakpoint + Phase B of 3 frames with
+#                breakpoint on 0x8003be88, ~125 TCP stops).
+# Module:        main (0x80016838, 0x80016868, 0x8003be88, 0x8003bea4, 0x8006ccf0)
+# Hypothesis:    a) In the pause menu (lighter scene), frame_end_sync
+#                   reaches 0x80016838 in < 1 VSync, so delta < 0x19
+#                   and the extra VSync(0) at 0x80016868 executes.
+#                b) The rcnt2_tick_isr ISR (0x8003be88) runs ~34-35 times
+#                   per 30 Hz frame, matching 1:1 with the increment of
+#                   rcnt2_tick_count (0x8003bea4) in each frame.
+# Success:       - In Phase A (20 frames paused): hits_6868_a is recorded
+#                  (> 0 if pause triggers extra VSync) and delta_tick ~= 690.
+#                - In Phase B (3 consecutive frames): on each frame,
+#                  hits_isr(0x8003be88) == delta(0x8003bea4) and is around 34-35.
+# Failure:       The breakpoint at 0x80016838 or 0x8003be88 does not hit within
+#                PSX_GDB_TIMEOUT seconds, or hits_isr(0x8003be88) !=
+#                delta(0x8003bea4) / differs clearly from ~34.5 per frame.
+# Writes memory: no
 # ------------------------------------------------------------------
 
-# --- Fase A: 20 cuadros en pausa sin breakpoint en 0x8003be88 ---
+# --- Phase A: 20 frames paused without breakpoint on 0x8003be88 ---
 set $hits_a = 0
 set $target_a = 20
 set $hits_6868_a = 0
@@ -61,7 +61,7 @@ end
 continue
 delete
 
-# --- Fase B: 3 cuadros consecutivos con breakpoint en 0x8003be88 ---
+# --- Phase B: 3 consecutive frames with breakpoint on 0x8003be88 ---
 set $frames_b = 0
 set $target_b = 3
 set $isr_hits = 0

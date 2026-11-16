@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# sync-ro.sh: sincroniza una copia aislada del proyecto de Ghidra para lectura
-# headless (pyghidra-mcp) sin tocar ni bloquear privado/ghidra.
+# sync-ro.sh: sync an isolated copy of the Ghidra project for headless
+# read-only access (pyghidra-mcp) without touching or locking privado/ghidra.
 #
-# Uso:
+# Usage:
 #   tools/ghidra/sync-ro.sh
 
 set -euo pipefail

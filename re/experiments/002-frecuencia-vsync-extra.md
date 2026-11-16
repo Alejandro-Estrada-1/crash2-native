@@ -1,16 +1,18 @@
-# Resultado — Experimento 002: Frecuencia de `0x80016838` y disparos de `0x80016868`
+English | [Español](002-frecuencia-vsync-extra.es.md)
 
-- **Fecha:** 2026-11-15
+# Result — Experiment 002: Frequency of `0x80016838` and Hits on `0x80016868`
+
+- **Date:** 2026-11-15
 - **Script:** `re/experiments/002-frecuencia-vsync-extra.gdb`
-- **Comando:**
+- **Command:**
   ```bash
   PSX_GDB_PORT=3333 PSX_GDB_TIMEOUT=120 scripts/gdb-psx -batch -x re/experiments/002-frecuencia-vsync-extra.gdb
   ```
-- **Entorno:** PCSX-Redux Build `561` (`61e3086f`), CPU intérprete, depurador activo, GDB `:3333`.
-- **Precondición:** Slot 1 cargado en el primer nivel, Crash quieto.
-- **Estado de salida:** `exit 0`, `[Inferior 1 (process 1) detached]` (sin cuelgues ni pausas residuales).
+- **Environment:** PCSX-Redux Build `561` (`61e3086f`), interpreter CPU, debugger enabled, GDB `:3333`.
+- **Precondition:** Slot 1 loaded in the first level, Crash standing still.
+- **Exit status:** `exit 0`, `[Inferior 1 (process 1) detached]` (no hangs or residual pauses).
 
-## Salida observada
+## Observed Output
 
 ```text
 resumen (60 cuadros completos entre paso 1 y paso 61 de 0x80016838):
@@ -20,8 +22,8 @@ resumen (60 cuadros completos entre paso 1 y paso 61 de 0x80016838):
   delta DAT_8003bea4 = 2071 ticks (ticks/cuadro = 34)
 ```
 
-## Análisis
+## Analysis
 
-- `delta DAT_8006ccf0 == 60` confirma que `0x80016838` (`VSync(0)` en `FUN_8001645c`) se ejecuta **1 vez por cuadro lógico**.
-- `delta DAT_8003bea4 == 2071` ticks en 60 cuadros equivale a **`34.52` ticks/cuadro** (~`2071 / 1033.6 ≈ 2.004 s` para 60 cuadros ≈ **`30.0 Hz`**).
-- `disparos 0x80016868 = 0` en los 60 cuadros medidos con Crash quieto en el primer nivel: el trabajo CPU+GPU de esa escena supera 1 VSync (>16.7 ms), así que el primer `VSync(0)` (`0x80016838`) sincroniza ya en el segundo VBlank (`delta >= 0x19`) y no necesita el `VSync(0)` adicional. Queda pendiente medir en pantalla de pausa/mapa para comprobar el caso en que `0x80016868` sí se dispara.
+- `delta DAT_8006ccf0 == 60` confirms that `0x80016838` (`VSync(0)` in `FUN_8001645c`) runs **once per logical frame**.
+- `delta DAT_8003bea4 == 2071` ticks across 60 frames equals **`34.52` ticks/frame** (~`2071 / 1033.6 ≈ 2.004 s` for 60 frames ≈ **`30.0 Hz`**).
+- `disparos 0x80016868 = 0` across the 60 measured frames with Crash standing still in the first level: the CPU+GPU work of that scene exceeds 1 VSync (>16.7 ms), so the first `VSync(0)` (`0x80016838`) already synchronizes on the second VBlank (`delta >= 0x19`) and does not need the extra `VSync(0)`. Measuring on the pause/map screen remains pending to verify the case where `0x80016868` does fire.
