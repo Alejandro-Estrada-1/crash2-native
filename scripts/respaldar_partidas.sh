@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# Respalda las partidas (memory cards y estados F5) con fecha y verifica hashes.
+# Back up save files (memory cards and F5 states) with timestamps and SHA-256 verification.
 #
 #   scripts/respaldar_partidas.sh
 #
-# Copia el contenido de saves/ (enlace a ../privado/partidas) a
-#   ../privado/respaldos/partidas-AAAA-MM-DD-HHMMSS/
-# y deja ahí un SHA256SUMS para verificarlo más tarde con:
+# Copies saves/ (symlink to ../privado/partidas) into
+#   ../privado/respaldos/partidas-YYYY-MM-DD-HHMMSS/
+# and writes SHA256SUMS so backups can be verified later with:
 #   (cd ../privado/respaldos/partidas-... && sha256sum -c SHA256SUMS)
 #
-# Se niega a correr si el juego está abierto: podría copiar una memory card a
-# medio escribir. Nunca borra ni modifica las partidas ni respaldos anteriores.
+# Refuses to run while the game is open to avoid copying a partially written
+# memory card. Never deletes or modifies save files or previous backups.
 #
-# Variables (para pruebas): SAVES_DIR (saves/ por defecto) y
-# RESPALDOS_DIR (../privado/respaldos por defecto).
+# Variables (for testing): SAVES_DIR (default: saves/) and
+# RESPALDOS_DIR (default: ../privado/respaldos).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -21,7 +21,7 @@ cd "$ROOT"
 case "${1:-}" in
   "") ;;
   -h|--help) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-  *) echo "error: argumento desconocido: $1" >&2; exit 2 ;;
+  *) echo "error: unknown argument: $1" >&2; exit 2 ;;
 esac
 
 info()  { printf '==> %s\n' "$*"; }
@@ -30,55 +30,55 @@ error() { printf 'error: %s\n' "$*" >&2; exit 1; }
 SAVES_DIR="${SAVES_DIR:-saves}"
 RESPALDOS_DIR="${RESPALDOS_DIR:-../privado/respaldos}"
 
-# --- 1. El juego debe estar cerrado -----------------------------------------
-# Nombres del ejecutable: el fijo del proyecto más los que haya publicado CMake
-# en cada build (psxrecomp_exe_name-psx-runtime.txt).
-nombres=(crash2_native)
+# --- 1. Ensure the game is closed -------------------------------------------
+# Candidate binary names: fixed project name plus names recorded by CMake in
+# each build directory (psxrecomp_exe_name-psx-runtime.txt).
+names=(crash2_native)
 for f in build-*/psxrecomp_exe_name-psx-runtime.txt; do
-  [[ -f "$f" ]] && nombres+=("$(<"$f")")
+  [[ -f "$f" ]] && names+=("$(<"$f")")
 done
-for n in $(printf '%s\n' "${nombres[@]}" | sort -u); do
-  # pgrep -x compara el nombre del proceso (comm, máximo 15 caracteres).
+for n in $(printf '%s\n' "${names[@]}" | sort -u); do
+  # pgrep -x matches process comm name (15-character limit).
   if pids="$(pgrep -x "${n:0:15}")"; then
-    error "el juego está abierto ($n, PID ${pids//$'\n'/ }). Ciérralo y vuelve a intentarlo."
+    error "the game is running ($n, PID ${pids//$'\n'/ }). Close it and retry."
   fi
 done
 
-# --- 2. Origen ---------------------------------------------------------------
-[[ -e "$SAVES_DIR" ]] || error "no existe $SAVES_DIR/ (¿falta el enlace a ../privado/partidas?)"
-origen="$(readlink -f "$SAVES_DIR")"
-[[ -d "$origen" ]] || error "$SAVES_DIR no apunta a una carpeta: $origen"
+# --- 2. Source directory ----------------------------------------------------
+[[ -e "$SAVES_DIR" ]] || error "$SAVES_DIR/ does not exist (missing symlink to ../privado/partidas?)"
+src_dir="$(readlink -f "$SAVES_DIR")"
+[[ -d "$src_dir" ]] || error "$SAVES_DIR does not point to a directory: $src_dir"
 
-# Manifiesto de hashes, con rutas relativas y orden estable.
-manifiesto() {
+# Hash manifest with relative paths in deterministic sort order.
+manifest() {
   (cd "$1" && find . -type f ! -name SHA256SUMS -print0 | LC_ALL=C sort -z \
      | xargs -0 -r sha256sum)
 }
 
-antes="$(manifiesto "$origen")"
-[[ -n "$antes" ]] || error "$origen está vacía: no hay nada que respaldar"
-n_archivos="$(printf '%s\n' "$antes" | wc -l)"
+before="$(manifest "$src_dir")"
+[[ -n "$before" ]] || error "$src_dir is empty: nothing to back up"
+file_count="$(printf '%s\n' "$before" | wc -l)"
 
-# --- 3. Copia ----------------------------------------------------------------
+# --- 3. Copy ----------------------------------------------------------------
 mkdir -p "$RESPALDOS_DIR"
-destino="$(readlink -f "$RESPALDOS_DIR")/partidas-$(date +%Y-%m-%d-%H%M%S)"
-[[ ! -e "$destino" ]] || error "ya existe $destino"
-case "$destino/" in
-  "$origen"/*) error "el destino ($destino) está dentro del origen ($origen)" ;;
+dest_dir="$(readlink -f "$RESPALDOS_DIR")/partidas-$(date +%Y-%m-%d-%H%M%S)"
+[[ ! -e "$dest_dir" ]] || error "$dest_dir already exists"
+case "$dest_dir/" in
+  "$src_dir"/*) error "destination ($dest_dir) is inside source ($src_dir)" ;;
 esac
 
-info "Copiando $origen -> $destino ($n_archivos archivos)"
-mkdir "$destino"
-cp -a "$origen/." "$destino/"
+info "Copying $src_dir -> $dest_dir ($file_count files)"
+mkdir "$dest_dir"
+cp -a "$src_dir/." "$dest_dir/"
 
-# --- 4. Verificación ---------------------------------------------------------
-printf '%s\n' "$antes" > "$destino/SHA256SUMS"
-(cd "$destino" && sha256sum --quiet -c SHA256SUMS) \
-  || error "la copia en $destino no coincide con el origen"
+# --- 4. Verification --------------------------------------------------------
+printf '%s\n' "$before" > "$dest_dir/SHA256SUMS"
+(cd "$dest_dir" && sha256sum --quiet -c SHA256SUMS) \
+  || error "backup in $dest_dir does not match source"
 
-# Si algo escribió en el origen durante la copia, el respaldo no es coherente.
-despues="$(manifiesto "$origen")"
-[[ "$antes" == "$despues" ]] \
-  || error "las partidas cambiaron durante la copia; el respaldo en $destino no es fiable. Repite con el juego cerrado."
+# If saves changed mid-copy, the snapshot is inconsistent.
+after="$(manifest "$src_dir")"
+[[ "$before" == "$after" ]] \
+  || error "save files changed during copy; backup in $dest_dir may be inconsistent. Retry with the game closed."
 
-info "Listo: $n_archivos archivos verificados en $destino"
+info "Done: verified $file_count files in $dest_dir"

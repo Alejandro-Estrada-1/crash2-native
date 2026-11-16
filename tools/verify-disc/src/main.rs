@@ -1,4 +1,4 @@
-//! CLI `verify-disc` — valida imágenes PS1 en modo solo lectura contra `game.toml`.
+//! `verify-disc` CLI -- validates PS1 disc images read-only against `game.toml`.
 
 use std::fmt::Write as _;
 use std::path::PathBuf;
@@ -58,21 +58,21 @@ fn parse_args() -> Result<Option<Args>, String> {
             "--config" => {
                 let val = it
                     .next()
-                    .ok_or_else(|| "falta la ruta después de --config".to_string())?;
+                    .ok_or_else(|| "missing path after --config".to_string())?;
                 config = PathBuf::from(val);
             }
             "--disc" => {
                 let val = it
                     .next()
-                    .ok_or_else(|| "falta la ruta después de --disc".to_string())?;
+                    .ok_or_else(|| "missing path after --disc".to_string())?;
                 disc = Some(PathBuf::from(val));
             }
             other if other.starts_with('-') => {
-                return Err(format!("opción desconocida: {other} (usa --help)"));
+                return Err(format!("unknown option: {other} (use --help)"));
             }
             positional => {
                 if disc.is_some() {
-                    return Err(format!("argumento posicional inesperado: {positional}"));
+                    return Err(format!("unexpected positional argument: {positional}"));
                 }
                 disc = Some(PathBuf::from(positional));
             }
@@ -85,21 +85,21 @@ fn parse_args() -> Result<Option<Args>, String> {
 fn print_help() {
     println!(
         "\
-Uso: verify-disc [--config <game.toml>] [--disc <ruta.cue|ruta.bin>] [--json]
+Usage: verify-disc [--config <game.toml>] [--disc <path.cue|path.bin>] [--json]
 
-Verifica tamaño, CRC-32, MD5 y SHA-1 en modo solo lectura contra [prepare_disc]
-en game.toml (tabla Redump).
+Verifies size, CRC-32, MD5, and SHA-1 read-only against [prepare_disc]
+in game.toml (Redump table).
 
-Opciones:
-  --config <ruta>   Ruta a game.toml (por defecto: game.toml)
-  --disc <ruta>     Imagen .cue o .bin a comprobar (por defecto: [game] disc)
-  --json            Imprime el resultado en JSON
-  -h, --help        Muestra esta ayuda
+Options:
+  --config <path>   Path to game.toml (default: game.toml)
+  --disc <path>     .cue or .bin image to check (default: [game] disc)
+  --json            Print report as JSON
+  -h, --help        Show this help message
 
-Códigos de salida:
-  0  Imagen verificada (coincide con [prepare_disc])
-  2  Error de uso, lectura o formato (.toml / .cue)
-  3  Los hashes o el tamaño no coinciden"
+Exit codes:
+  0  Image verified (matches [prepare_disc])
+  2  Usage, I/O, or parsing error (.toml / .cue)
+  3  Size or at least one digest does not match"
     );
 }
 
@@ -110,48 +110,48 @@ fn print_report(rep: &VerifyReport, as_json: bool) {
     }
 
     let sector_info = match rep.sectors {
-        Some(n) => format!("{n} sectores x 2352 B"),
-        None => "NO múltiplo de 2352 B".to_string(),
+        Some(n) => format!("{n} sectors x 2352 B"),
+        None => "NOT a multiple of 2352 B".to_string(),
     };
 
-    println!("Juego:   {}", rep.game_id);
-    println!("Imagen:  {}", rep.resolved_bin.display());
+    println!("Game:     {}", rep.game_id);
+    println!("Image:    {}", rep.resolved_bin.display());
     println!(
-        "Tamaño:  {} bytes ({}) [{}]",
+        "Size:     {} bytes ({}) [{}]",
         rep.digests.size,
         sector_info,
         status_tag(rep.checks.size_ok)
     );
     println!(
-        "CRC-32:  {} [{}]",
+        "CRC-32:   {} [{}]",
         rep.digests.crc32,
         status_tag(rep.checks.crc32_ok)
     );
     println!(
-        "MD5:     {} [{}]",
+        "MD5:      {} [{}]",
         rep.digests.md5,
         status_tag(rep.checks.md5_ok)
     );
     println!(
-        "SHA-1:   {} [{}]",
+        "SHA-1:    {} [{}]",
         rep.digests.sha1,
         status_tag(rep.checks.sha1_ok)
     );
     if !rep.checks.alignment_ok {
-        println!("Revisión: los campos pertenecen a revisiones distintas [FALLO]");
+        println!("Revision: matched fields belong to different revisions [FAIL]");
     }
     if rep.passed {
-        println!("Estado:  VERIFICADO");
+        println!("Status:   VERIFIED");
     } else {
-        println!("Estado:  NO COINCIDE");
+        println!("Status:   MISMATCH");
     }
 }
 
 fn status_tag(flag: Option<bool>) -> &'static str {
     match flag {
         Some(true) => "OK",
-        Some(false) => "NO COINCIDE",
-        None => "sin declarar",
+        Some(false) => "MISMATCH",
+        None => "unlisted",
     }
 }
 

@@ -1,9 +1,9 @@
-//! Analizador mínimo de `game.toml` para `[game]` y `[prepare_disc]`.
+//! Minimal `game.toml` parser for `[game]` and `[prepare_disc]`.
 
 use std::fs;
 use std::path::Path;
 
-/// Valores Redump y rutas leídos desde `game.toml`.
+/// Redump values and paths loaded from `game.toml`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct GameTomlConfig {
     pub game_id: Option<String>,
@@ -15,14 +15,14 @@ pub struct GameTomlConfig {
     pub known_sha1: Vec<String>,
 }
 
-/// Carga y analiza `game.toml`.
+/// Loads and parses `game.toml`.
 pub fn load_game_toml(path: &Path) -> Result<GameTomlConfig, String> {
     let text = fs::read_to_string(path)
-        .map_err(|e| format!("no se pudo leer {}: {e}", path.display()))?;
+        .map_err(|e| format!("failed to read {}: {e}", path.display()))?;
     parse_game_toml(&text)
 }
 
-/// Analiza el contenido TOML de `game.toml`.
+/// Parses the TOML content of `game.toml`.
 pub fn parse_game_toml(text: &str) -> Result<GameTomlConfig, String> {
     let mut cfg = GameTomlConfig::default();
     let mut section = String::new();
@@ -55,7 +55,7 @@ pub fn parse_game_toml(text: &str) -> Result<GameTomlConfig, String> {
         }
 
         let Some((k, v)) = cleaned.split_once('=') else {
-            return Err(format!("línea {} inválida en TOML: {}", line_idx + 1, cleaned));
+            return Err(format!("invalid TOML line {}: {}", line_idx + 1, cleaned));
         };
         let key = k.trim().to_string();
         let val = v.trim();
@@ -68,7 +68,7 @@ pub fn parse_game_toml(text: &str) -> Result<GameTomlConfig, String> {
     }
 
     if let Some(key) = pending_key {
-        return Err(format!("arreglo sin cerrar para clave `{key}` en TOML"));
+        return Err(format!("unclosed array for key `{key}` in TOML"));
     }
 
     Ok(cfg)
@@ -94,7 +94,7 @@ fn assign_key(
     Ok(())
 }
 
-/// Elimina comentarios `# ...` respetando cadenas entre comillas dobles o simples.
+/// Strips `# ...` comments while respecting single- and double-quoted strings.
 fn strip_comment(line: &str) -> &str {
     let mut in_double = false;
     let mut in_single = false;
@@ -182,9 +182,9 @@ fn parse_string(raw: &str, line_no: usize) -> Result<String, String> {
                 Some('r') => out.push('\r'),
                 Some('t') => out.push('\t'),
                 Some(other) => {
-                    return Err(format!("escape desconocido \\{other} en línea {line_no}"));
+                    return Err(format!("unknown escape \\{other} on line {line_no}"));
                 }
-                None => return Err(format!("escape incompleto en línea {line_no}")),
+                None => return Err(format!("incomplete escape on line {line_no}")),
             }
         }
         return Ok(out);
@@ -192,7 +192,7 @@ fn parse_string(raw: &str, line_no: usize) -> Result<String, String> {
     if let Some(inner) = s.strip_prefix('\'').and_then(|x| x.strip_suffix('\'')) {
         return Ok(inner.to_string());
     }
-    Err(format!("se esperaba cadena TOML en línea {line_no}: {raw}"))
+    Err(format!("expected TOML string on line {line_no}: {raw}"))
 }
 
 fn split_array_items(raw: &str, line_no: usize) -> Result<Vec<String>, String> {
@@ -200,7 +200,7 @@ fn split_array_items(raw: &str, line_no: usize) -> Result<Vec<String>, String> {
     let inner = s
         .strip_prefix('[')
         .and_then(|x| x.strip_suffix(']'))
-        .ok_or_else(|| format!("se esperaba arreglo `[...]` en línea {line_no}: {raw}"))?;
+        .ok_or_else(|| format!("expected array `[...]` on line {line_no}: {raw}"))?;
 
     let mut items = Vec::new();
     let mut start = 0usize;
@@ -255,7 +255,7 @@ fn parse_u64_array(raw: &str, line_no: usize) -> Result<Vec<u64>, String> {
         let cleaned = item.replace('_', "");
         let parsed = cleaned
             .parse::<u64>()
-            .map_err(|_| format!("entero inválido `{item}` cerca de línea {line_no}"))?;
+            .map_err(|_| format!("invalid integer `{item}` near line {line_no}"))?;
         out.push(parsed);
     }
     Ok(out)
@@ -276,7 +276,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parsea_formato_crash2_game_toml() {
+    fn parses_crash2_game_toml_format() {
         let sample = r#"
 [game]
 name = "crash2-native"
@@ -286,14 +286,14 @@ disc = "disc/Crash Bandicoot 2 - Cortex Strikes Back (USA).cue"
 [prepare_disc]
 known_sizes = [192_814_608]
 known_md5 = [
-  "3C31B5E038F025098A2FDFA70C8213F2", # comentario interno
+  "3C31B5E038F025098A2FDFA70C8213F2", # inline comment
 ]
 known_sha1 = [
   "3d37fe4288a83b01f1a0edbf78e76e0fede6bc22",
 ]
 known_crc32 = ["395c0916"]
 "#;
-        let cfg = parse_game_toml(sample).expect("parse válido");
+        let cfg = parse_game_toml(sample).expect("valid parse");
         assert_eq!(cfg.game_id.as_deref(), Some("SCUS-94154"));
         assert_eq!(
             cfg.game_disc.as_deref(),
@@ -309,7 +309,7 @@ known_crc32 = ["395c0916"]
     }
 
     #[test]
-    fn rechaza_arreglo_sin_cerrar() {
+    fn rejects_unclosed_array() {
         let bad = "[prepare_disc]\nknown_md5 = [\n\"abc\"\n";
         assert!(parse_game_toml(bad).is_err());
     }

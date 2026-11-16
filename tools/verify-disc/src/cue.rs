@@ -1,13 +1,13 @@
-//! Resolución de la pista de datos desde un archivo .cue o .bin (solo lectura).
+//! Read-only resolution of the data track path from a `.cue` or `.bin` file.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// Resuelve la ruta de la pista de datos a partir de un `.cue` o `.bin`.
-/// Solo abre archivos en modo lectura.
+/// Resolves the data track path from a `.cue` or `.bin`.
+/// Opens files strictly read-only.
 pub fn resolve_disc_image(disc_path: &Path) -> Result<PathBuf, String> {
     if !disc_path.is_file() {
-        return Err(format!("no existe la imagen de disco: {}", disc_path.display()));
+        return Err(format!("disc image does not exist: {}", disc_path.display()));
     }
 
     let ext = disc_path
@@ -19,8 +19,8 @@ pub fn resolve_disc_image(disc_path: &Path) -> Result<PathBuf, String> {
     match ext.as_str() {
         "cue" => resolve_cue_data_bin(disc_path),
         "chd" => Err(format!(
-            "formato .chd no soportado directamente por verify-disc ({}): \
-             usa un par .cue/.bin o `psxrecomp_cli.py verify-disc`",
+            ".chd format is not directly supported by verify-disc ({}): \
+             use a .cue/.bin pair or `psxrecomp_cli.py verify-disc`",
             disc_path.display()
         )),
         _ => Ok(disc_path.to_path_buf()),
@@ -29,10 +29,10 @@ pub fn resolve_disc_image(disc_path: &Path) -> Result<PathBuf, String> {
 
 fn resolve_cue_data_bin(cue_path: &Path) -> Result<PathBuf, String> {
     let text = fs::read_to_string(cue_path)
-        .map_err(|e| format!("no se pudo leer {}: {e}", cue_path.display()))?;
+        .map_err(|e| format!("failed to read {}: {e}", cue_path.display()))?;
     let rel_bin = parse_track1_binary(&text).ok_or_else(|| {
         format!(
-            "el archivo .cue no contiene una pista BINARY válida: {}",
+            ".cue file contains no valid BINARY track: {}",
             cue_path.display()
         )
     })?;
@@ -40,7 +40,7 @@ fn resolve_cue_data_bin(cue_path: &Path) -> Result<PathBuf, String> {
     resolve_relative_insensitive(cue_path, &rel_bin)
 }
 
-/// Extrae el nombre de archivo de la pista 1 (o primer `FILE ... BINARY`).
+/// Extracts the filename for track 1 (or the first `FILE ... BINARY` entry).
 pub fn parse_track1_binary(cue_text: &str) -> Option<String> {
     let mut first_binary: Option<String> = None;
     let mut current_binary: Option<String> = None;
@@ -148,7 +148,7 @@ fn resolve_relative_insensitive(cue_path: &Path, raw_name: &str) -> Result<PathB
     }
 
     Err(format!(
-        "el .cue referencia un .bin inexistente: {}",
+        ".cue references a missing .bin file: {}",
         candidate.display()
     ))
 }
@@ -161,19 +161,19 @@ mod tests {
     fn temp_dir(tag: &str) -> PathBuf {
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .expect("reloj")
+            .expect("clock")
             .as_nanos();
         let dir = std::env::temp_dir().join(format!(
             "verify_disc_cue_{tag}_{}_{}",
             std::process::id(),
             nanos
         ));
-        fs::create_dir_all(&dir).expect("crear temp dir");
+        fs::create_dir_all(&dir).expect("create temp dir");
         dir
     }
 
     #[test]
-    fn parsea_cue_con_comillas_y_crlf() {
+    fn parses_quoted_cue_with_crlf() {
         let cue = "FILE \"Crash Bandicoot 2 (USA).bin\" BINARY\r\n  TRACK 01 MODE2/2352\r\n    INDEX 01 00:00:00\r\n";
         assert_eq!(
             parse_track1_binary(cue).as_deref(),
@@ -182,31 +182,31 @@ mod tests {
     }
 
     #[test]
-    fn parsea_cue_sin_comillas_y_rem() {
-        let cue = "REM Comentario\nFILE track01.bin BINARY\n  TRACK 01 MODE2/2352\n";
+    fn parses_unquoted_cue_and_rem() {
+        let cue = "REM Comment\nFILE track01.bin BINARY\n  TRACK 01 MODE2/2352\n";
         assert_eq!(parse_track1_binary(cue).as_deref(), Some("track01.bin"));
     }
 
     #[test]
-    fn resuelve_bin_relativo_e_insensible_a_mayusculas() {
+    fn resolves_relative_case_insensitive_bin() {
         let dir = temp_dir("case");
-        let bin = dir.join("Juego.BIN");
-        fs::write(&bin, b"hola").expect("escribir bin");
-        let cue = dir.join("juego.cue");
-        fs::write(&cue, "FILE \"juego.bin\" BINARY\n  TRACK 01 MODE2/2352\n").expect("escribir cue");
+        let bin = dir.join("Game.BIN");
+        fs::write(&bin, b"hello").expect("write bin");
+        let cue = dir.join("game.cue");
+        fs::write(&cue, "FILE \"game.bin\" BINARY\n  TRACK 01 MODE2/2352\n").expect("write cue");
 
-        let resolved = resolve_disc_image(&cue).expect("debe resolver");
-        assert_eq!(resolved.file_name().unwrap().to_str().unwrap(), "Juego.BIN");
+        let resolved = resolve_disc_image(&cue).expect("should resolve");
+        assert_eq!(resolved.file_name().unwrap().to_str().unwrap(), "Game.BIN");
         let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
-    fn rechaza_chd_con_mensaje_claro() {
+    fn rejects_chd_with_clear_message() {
         let dir = temp_dir("chd");
-        let chd = dir.join("disco.chd");
-        fs::write(&chd, b"MComprHD").expect("escribir chd dummy");
-        let err = resolve_disc_image(&chd).expect_err("chd no soportado");
-        assert!(err.contains(".chd"), "error inesperado: {err}");
+        let chd = dir.join("disc.chd");
+        fs::write(&chd, b"MComprHD").expect("write dummy chd");
+        let err = resolve_disc_image(&chd).expect_err("chd unsupported");
+        assert!(err.contains(".chd"), "unexpected error: {err}");
         let _ = fs::remove_dir_all(&dir);
     }
 }

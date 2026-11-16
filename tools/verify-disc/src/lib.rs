@@ -1,4 +1,4 @@
-//! Verificador de imagen de disco PS1 contra la tabla Redump en `game.toml`.
+//! Verifies a PS1 disc image against the Redump table in `game.toml`.
 
 pub mod cue;
 pub mod digest;
@@ -12,7 +12,7 @@ use toml::{load_game_toml, GameTomlConfig};
 
 pub const PS1_RAW_SECTOR_BYTES: u64 = 2352;
 
-/// Resultado detallado de verificación.
+/// Detailed verification report.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VerifyReport {
     pub config_path: PathBuf,
@@ -25,7 +25,7 @@ pub struct VerifyReport {
     pub passed: bool,
 }
 
-/// Estado por campo frente a `[prepare_disc]`.
+/// Per-field validation status against `[prepare_disc]`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FieldChecks {
     pub size_ok: Option<bool>,
@@ -35,18 +35,18 @@ pub struct FieldChecks {
     pub alignment_ok: bool,
 }
 
-/// Tipo de error para mapear códigos de salida (`2` uso/IO, `3` discrepancia).
+/// Error type mapping to CLI exit codes (`2` usage/I/O, `3` mismatch).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VerifyError {
     UsageOrIo(String),
     Mismatch(Box<VerifyReport>),
 }
 
-/// Verifica la imagen indicada en `disc_override` o en `[game] disc` de `config_path`.
+/// Verifies the image given by `disc_override` or `[game] disc` in `config_path`.
 pub fn verify_disc(config_path: &Path, disc_override: Option<&Path>) -> Result<VerifyReport, VerifyError> {
     if !config_path.is_file() {
         return Err(VerifyError::UsageOrIo(format!(
-            "no existe el archivo de configuración: {}",
+            "config file does not exist: {}",
             config_path.display()
         )));
     }
@@ -60,7 +60,7 @@ pub fn verify_disc(config_path: &Path, disc_override: Option<&Path>) -> Result<V
         None => {
             let rel = cfg.game_disc.as_deref().ok_or_else(|| {
                 VerifyError::UsageOrIo(
-                    "falta `--disc` y `game.toml` no define `[game] disc`".to_string(),
+                    "missing `--disc` and `game.toml` does not define `[game] disc`".to_string(),
                 )
             })?;
             resolve_from_root(project_root, rel)
@@ -70,7 +70,7 @@ pub fn verify_disc(config_path: &Path, disc_override: Option<&Path>) -> Result<V
     let resolved_bin = resolve_disc_image(&requested).map_err(VerifyError::UsageOrIo)?;
     let digests = compute_file_digests(&resolved_bin).map_err(|e| {
         VerifyError::UsageOrIo(format!(
-            "error al leer {}: {e}",
+            "failed to read {}: {e}",
             resolved_bin.display()
         ))
     })?;
@@ -99,7 +99,7 @@ fn ensure_redump_table_present(cfg: &GameTomlConfig) -> Result<(), VerifyError> 
         && cfg.known_sha1.is_empty()
     {
         return Err(VerifyError::UsageOrIo(
-            "`game.toml` no declara ningún valor en `[prepare_disc] known_*`".to_string(),
+            "`game.toml` declares no values in `[prepare_disc] known_*`".to_string(),
         ));
     }
     Ok(())
@@ -135,7 +135,7 @@ fn evaluate_report(
         game_id: cfg
             .game_id
             .clone()
-            .unwrap_or_else(|| "desconocido".to_string()),
+            .unwrap_or_else(|| "unknown".to_string()),
         digests,
         sectors,
         checks: FieldChecks {
@@ -149,8 +149,8 @@ fn evaluate_report(
     }
 }
 
-/// Si todas las listas declaradas tienen la misma longitud `N > 1`, exige que
-/// la coincidencia corresponda a la misma revisión `i` en todas las listas.
+/// When all declared lists have equal length `N > 1`, requires the match to
+/// correspond to the same revision index `i` across every list.
 fn aligned_revision_matches(cfg: &GameTomlConfig, digests: &DiscDigests) -> bool {
     let lens = [
         cfg.known_sizes.len(),
@@ -184,27 +184,27 @@ mod tests {
     fn make_temp_dir(tag: &str) -> PathBuf {
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .expect("reloj")
+            .expect("clock")
             .as_nanos();
         let dir = std::env::temp_dir().join(format!(
             "verify_disc_lib_{tag}_{}_{}",
             std::process::id(),
             nanos
         ));
-        fs::create_dir_all(&dir).expect("crear temp dir");
+        fs::create_dir_all(&dir).expect("create temp dir");
         dir
     }
 
     #[test]
-    fn acepta_imagen_sintetica_via_cue_y_redump() {
+    fn accepts_synthetic_image_via_cue_and_redump() {
         let dir = make_temp_dir("ok");
         let bin = dir.join("test.bin");
         let payload = vec![0xA5u8; 2352];
-        fs::write(&bin, &payload).expect("escribir bin");
+        fs::write(&bin, &payload).expect("write bin");
         let d = compute_file_digests(&bin).expect("digests");
 
         let cue = dir.join("test.cue");
-        fs::write(&cue, "FILE \"test.bin\" BINARY\n  TRACK 01 MODE2/2352\n").expect("escribir cue");
+        fs::write(&cue, "FILE \"test.bin\" BINARY\n  TRACK 01 MODE2/2352\n").expect("write cue");
 
         let toml = dir.join("game.toml");
         fs::write(
@@ -216,9 +216,9 @@ mod tests {
                 d.size, d.md5, d.sha1, d.crc32
             ),
         )
-        .expect("escribir game.toml");
+        .expect("write game.toml");
 
-        let rep = verify_disc(&toml, None).expect("debe pasar");
+        let rep = verify_disc(&toml, None).expect("should pass");
         assert!(rep.passed);
         assert_eq!(rep.sectors, Some(1));
         assert_eq!(rep.checks.crc32_ok, Some(true));
@@ -226,10 +226,10 @@ mod tests {
     }
 
     #[test]
-    fn rechaza_crc32_alterado_aunque_md5_y_sha1_coincidan() {
+    fn rejects_altered_crc32_even_when_md5_and_sha1_match() {
         let dir = make_temp_dir("bad_crc");
         let bin = dir.join("test.bin");
-        fs::write(&bin, b"123456789").expect("escribir bin");
+        fs::write(&bin, b"123456789").expect("write bin");
         let d = compute_file_digests(&bin).expect("digests");
 
         let toml = dir.join("game.toml");
@@ -242,7 +242,7 @@ mod tests {
                 d.size, d.md5, d.sha1
             ),
         )
-        .expect("escribir game.toml");
+        .expect("write game.toml");
 
         match verify_disc(&toml, None) {
             Err(VerifyError::Mismatch(rep)) => {
@@ -252,16 +252,16 @@ mod tests {
                 assert_eq!(rep.checks.sha1_ok, Some(true));
                 assert_eq!(rep.checks.crc32_ok, Some(false));
             }
-            other => panic!("se esperaba Mismatch, obtenido: {other:?}"),
+            other => panic!("expected Mismatch, got: {other:?}"),
         }
         let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
-    fn rechaza_mezcla_cruzada_de_revisiones() {
+    fn rejects_cross_revision_mix() {
         let dir = make_temp_dir("cross_rev");
         let bin = dir.join("rev0.bin");
-        fs::write(&bin, b"rev0").expect("escribir bin");
+        fs::write(&bin, b"rev0").expect("write bin");
         let d = compute_file_digests(&bin).expect("digests");
 
         let toml = dir.join("game.toml");
@@ -275,11 +275,11 @@ mod tests {
                 d.size, d.crc32, d.md5
             ),
         )
-        .expect("escribir game.toml");
+        .expect("write game.toml");
 
         match verify_disc(&toml, None) {
             Err(VerifyError::Mismatch(rep)) => assert!(!rep.checks.alignment_ok),
-            other => panic!("se esperaba Mismatch por mezcla cruzada: {other:?}"),
+            other => panic!("expected Mismatch for cross-revision mix: {other:?}"),
         }
         let _ = fs::remove_dir_all(&dir);
     }

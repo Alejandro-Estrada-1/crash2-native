@@ -1,13 +1,13 @@
 #!/bin/sh
-# AppRun — punto de entrada para el AppImage de crash2-native.
+# AppRun -- entry point for the crash2-native AppImage.
 #
-# El AppImage es de solo lectura: los datos escritos por el usuario, las
-# fuentes generadas, el ejecutable compilado, las partidas y la caché de
-# overlays viven en ${CRASH2NATIVE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/crash2-native}.
+# The AppImage is read-only: user-written data, generated C sources, compiled
+# game executable, saves, and overlay cache live under
+# ${CRASH2NATIVE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/crash2-native}.
 set -eu
 
 if [ -z "${APPDIR:-}" ]; then
-  echo "crash2-native: APPDIR no está definido; ejecuta este script dentro del AppImage." >&2
+  echo "crash2-native: APPDIR is not set; run this script from inside the AppImage." >&2
   exit 1
 fi
 
@@ -21,14 +21,14 @@ fi
 
 if [ ! -x "${setup_runtime}" ] || [ ! -x "${verify_bin}" ] ||
    [ ! -f "${payload}/game.toml" ] || [ ! -f "${payload}/CMakeLists.txt" ]; then
-  echo "crash2-native: el payload del AppImage está incompleto." >&2
+  echo "crash2-native: incomplete AppImage payload." >&2
   exit 1
 fi
 
 export PYTHONDONTWRITEBYTECODE=1
 
-# Limpia cualquier ruta dentro de $APPDIR en LD_LIBRARY_PATH: nunca debemos
-# inyectar bibliotecas gráficas/de ventana desde el AppImage al juego compilado.
+# Strip any path inside $APPDIR from LD_LIBRARY_PATH: never inject bundled
+# graphics or window-system libraries into the compiled game binary.
 sanitize_ld_library_path() {
   if [ -z "${LD_LIBRARY_PATH:-}" ]; then
     return 0
@@ -56,24 +56,24 @@ sanitize_ld_library_path() {
 
 print_help() {
   cat <<EOF
-crash2-native ${app_version} — Port nativo para Linux de Crash Bandicoot 2 (SCUS-94154)
+crash2-native ${app_version} -- Native Linux port of Crash Bandicoot 2 (SCUS-94154)
 
-Uso:
-  crash2-native.AppImage [opciones]
+Usage:
+  crash2-native.AppImage [options]
 
-Opciones del AppImage:
-  --setup               Abre el asistente de generación/compilación aunque ya exista build
-  --verify-disc [RUTA]  Verifica una imagen de disco contra game.toml (sin iniciar GUI)
-  --check-prereqs       Comprueba python3 y cabeceras mínimas de GL/X11/ALSA en el host
-  --version             Muestra la versión empaquetada
-  -h, --help            Muestra esta ayuda
+AppImage options:
+  --setup               Open the codegen/build wizard even if already built
+  --verify-disc [PATH]  Verify a disc image against game.toml (headless)
+  --check-prereqs       Check host python3 and minimal GL/X11/ALSA dev files
+  --version             Print packaged version
+  -h, --help            Show this help message
 
-El resto de opciones (p. ej. --no-launcher, --disc <cue>) se pasan al runtime.
+All other options (e.g. --no-launcher, --disc <cue>) are forwarded to the runtime.
 
-Variables de entorno:
-  CRASH2NATIVE_DATA_DIR        Directorio de datos (por defecto ~/.local/share/crash2-native)
-  CRASH2NATIVE_USE_SYSTEM_CC=1 Usa cc/c++ del sistema en lugar del Zig empaquetado
-  CRASH2NATIVE_DISC            Preselecciona la ruta al .cue/.bin en game.toml
+Environment variables:
+  CRASH2NATIVE_DATA_DIR        Data directory (default ~/.local/share/crash2-native)
+  CRASH2NATIVE_USE_SYSTEM_CC=1 Use system cc/c++ instead of bundled Zig
+  CRASH2NATIVE_DISC            Preselect .cue/.bin path in game.toml
 EOF
 }
 
@@ -87,7 +87,7 @@ resolve_data_dir() {
   elif [ -n "${HOME:-}" ]; then
     data_home="${HOME}/.local/share"
   else
-    echo "crash2-native: HOME no está definido; exporta CRASH2NATIVE_DATA_DIR." >&2
+    echo "crash2-native: HOME is not set; export CRASH2NATIVE_DATA_DIR." >&2
     exit 1
   fi
   printf '%s/crash2-native\n' "${data_home}"
@@ -125,7 +125,7 @@ distro_install_hint() {
   case " ${id} ${id_like} " in
     *ubuntu*|*debian*|*pop*|*mint*|*elementary*)
       cat <<'EOF' >&2
-Instala los requisitos en Ubuntu/Debian con:
+Install host requirements on Ubuntu/Debian with:
   sudo apt update && sudo apt install -y \
     python3 libgl-dev libx11-dev libxext-dev libxcursor-dev libxfixes-dev \
     libxi-dev libxrandr-dev libxss-dev libxtst-dev libasound2-dev
@@ -133,7 +133,7 @@ EOF
       ;;
     *arch*|*manjaro*|*endeavouros*|*steamos*)
       cat <<'EOF' >&2
-Instala los requisitos en Arch/derivadas con:
+Install host requirements on Arch/derivatives with:
   sudo pacman -S --needed \
     python libglvnd libx11 libxext libxcursor libxfixes libxi libxrandr \
     libxss libxtst alsa-lib
@@ -141,7 +141,7 @@ EOF
       ;;
     *fedora*|*rhel*|*centos*|*nobara*)
       cat <<'EOF' >&2
-Instala los requisitos en Fedora con:
+Install host requirements on Fedora with:
   sudo dnf install -y \
     python3 mesa-libGL-devel libX11-devel libXext-devel libXcursor-devel \
     libXfixes-devel libXi-devel libXrandr-devel libXScrnSaver-devel \
@@ -150,8 +150,9 @@ EOF
       ;;
     *)
       cat <<'EOF' >&2
-Instala en tu distribución: Python 3 y los paquetes de desarrollo (-dev/-devel)
-de OpenGL (libGL/GLVND), X11 + Xext/Xcursor/Xfixes/Xi/Xrandr/Xss/Xtst y ALSA.
+Install via your distribution package manager: Python 3 and development
+packages (-dev/-devel) for OpenGL (libGL/GLVND), X11 +
+Xext/Xcursor/Xfixes/Xi/Xrandr/Xss/Xtst, and ALSA.
 EOF
       ;;
   esac
@@ -161,29 +162,29 @@ check_build_prereqs() {
   missing=""
   if ! command -v python3 >/dev/null 2>&1; then
     missing="${missing}
-  - python3 (intérprete Python 3)"
+  - python3 (Python 3 interpreter)"
   fi
 
   if [ "${CRASH2NATIVE_USE_SYSTEM_CC:-0}" = "1" ]; then
     for sys_tool in cmake ninja; do
       if ! command -v "$sys_tool" >/dev/null 2>&1; then
         missing="${missing}
-  - ${sys_tool} (requerido cuando CRASH2NATIVE_USE_SYSTEM_CC=1)"
+  - ${sys_tool} (required when CRASH2NATIVE_USE_SYSTEM_CC=1)"
       fi
     done
     if ! command -v cc >/dev/null 2>&1 && ! command -v gcc >/dev/null 2>&1 && ! command -v clang >/dev/null 2>&1; then
       missing="${missing}
-  - compilador C (cc/gcc/clang)"
+  - C compiler (cc/gcc/clang)"
     fi
     if ! command -v c++ >/dev/null 2>&1 && ! command -v g++ >/dev/null 2>&1 && ! command -v clang++ >/dev/null 2>&1; then
       missing="${missing}
-  - compilador C++ (c++/g++/clang++)"
+  - C++ compiler (c++/g++/clang++)"
     fi
   fi
 
   if ! has_header "GL/gl.h" || { ! has_lib "libGL.so" && ! has_lib "libOpenGL.so"; }; then
     missing="${missing}
-  - OpenGL dev (GL/gl.h y libGL.so o libOpenGL.so)"
+  - OpenGL dev (GL/gl.h and libGL.so or libOpenGL.so)"
   fi
 
   for x_hdr in \
@@ -193,24 +194,24 @@ check_build_prereqs() {
     X11/extensions/scrnsaver.h X11/Xcursor/Xcursor.h; do
     if ! has_header "$x_hdr"; then
       missing="${missing}
-  - cabecera X11: ${x_hdr}"
+  - X11 header: ${x_hdr}"
     fi
   done
 
   for x_lib in libX11.so libXext.so libXcursor.so libXfixes.so libXi.so libXrandr.so libXss.so libXtst.so; do
     if ! has_lib "$x_lib"; then
       missing="${missing}
-  - biblioteca X11 dev: ${x_lib}"
+  - X11 dev library: ${x_lib}"
     fi
   done
 
   if ! has_header "alsa/asoundlib.h" || ! has_lib "libasound.so"; then
     missing="${missing}
-  - ALSA dev (alsa/asoundlib.h y libasound.so)"
+  - ALSA dev (alsa/asoundlib.h and libasound.so)"
   fi
 
   if [ -n "$missing" ]; then
-    echo "crash2-native: faltan dependencias del anfitrión para compilar el juego:${missing}" >&2
+    echo "crash2-native: missing host prerequisites to compile the game:${missing}" >&2
     echo "" >&2
     distro_install_hint
     return 1
@@ -302,8 +303,8 @@ prepare_project_tree() {
     fi
   done
 
-  # psxrecomp/ necesita runtime/include escribible porque hash_codegen.cmake
-  # verifica o regenera overlay_codegen_hash.h dentro de esa carpeta.
+  # psxrecomp/ needs a writable runtime/include because hash_codegen.cmake
+  # checks or regenerates overlay_codegen_hash.h inside that directory.
   link_entries_except "${link_base}/psxrecomp" "${project}/psxrecomp" "runtime"
   link_entries_except "${link_base}/psxrecomp/runtime" "${project}/psxrecomp/runtime" "include"
   link_entries_except "${link_base}/psxrecomp/runtime/include" "${project}/psxrecomp/runtime/include" "overlay_codegen_hash.h"
@@ -480,12 +481,12 @@ case "${1:-}" in
     ;;
   --check-prereqs)
     check_build_prereqs
-    echo "crash2-native: prerequisitos de compilación verificados."
+    echo "crash2-native: build prerequisites verified."
     exit 0
     ;;
 esac
 
-# Filtra --setup de los argumentos que llegan al ejecutable del juego/setup.
+# Filter --setup from arguments forwarded to the game/setup executable.
 force_setup="${CRASH2NATIVE_FORCE_SETUP:-0}"
 argc_total=$#
 idx=0

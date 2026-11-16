@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
 Name=Crash Bandicoot 2 (crash2-native)
-Comment=Port nativo para Linux de Crash Bandicoot 2 (SCUS-94154) sobre psxrecomp
+Comment=Native Linux port of Crash Bandicoot 2 (SCUS-94154) built on psxrecomp
 Exec=crash2-native %F
 Icon=crash2-native
 Terminal=false
