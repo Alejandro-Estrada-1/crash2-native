@@ -343,12 +343,110 @@ Registro vivo del análisis estático y dinámico de *Crash Bandicoot 2: Cortex 
   - **`DisplayContext` (`0x8006345c`, `2` × `0x2094` B):** `+0x00` id (`0/1`), `+0x04` ot/buf base, `+0x08` `prim_ptr`, `+0x0c` `raw_ticks`, `+0x10` `draw_end_ticks`, `+0x14` `quant_ticks`, `+0x18..+0x2017` OT (`2048` words), `+0x2018` `DISPENV` (`20` B), `+0x202c` `DRAWENV` (`92` B), `+0x2088..+0x2090` cola/arena de nodos de entidades.
 
 - **Frente 3.3 — Dependencias adicionales de `512x216` y `5/8` en HUD / sprites / fondo (Fase 5):**
-  - **Tres sitios independientes con factor `5/8` en Y:** (1) `cam_matrix_aspect_scale` (`0x80017af8`, `* -5 >> 3`), (2) `model_view_matrix_build` (`0x8003d3cc` para texto 3D/HUD, `* 5 >> 3`), y (3) **`matrix_aspect_scale_local` (`0x80043090`, `mult 0xa0; sra 8` = `160/256 = 5/8`)**, clon inline usado por **`hud_transform_2d` (`0x80044558`)** y modos `0x800443ec`/`0x800447a4` (`0x8005b690`). `hud_transform_2d` fija `TR = (x>>8, -(y>>8), gte_stH())`, proyectando HUD respecto a `SetGeomOffset(256, 108)` sin depender de `H`, pero manteniendo escala Y `5/8` respecto al ancho `512px`.
+  - **Tres sitios independientes con factor `5/8` en Y:** (1) `cam_matrix_aspect_scale` (`0x80017af8`, `* -5 >> 3`), (2) `model_view_matrix_build` (`0x8003d3cc` para texto 3D/HUD, `* 5 >> 3`), y (3) **`matrix_aspect_scale_local` (`0x80043090`, `-((val * 0xa0) >> 8) = -5/8` en fila Y y negación de fila Z)**, clon inline usado por **`hud_transform_2d` (`0x80044558`)** y modos `0x800443ec`/`0x800444bc`/`0x800447a4` (`0x8005b690`). `hud_transform_2d` fija `TR = (x>>8, -(y>>8), gte_stH())`, proyectando HUD respecto a `SetGeomOffset(256, 108)` sin depender de `H`, pero manteniendo escala Y `-5/8` respecto al ancho `512px`.
   - **Sprites, fondo, fundidos y recorte hardware `512x216`:**
     - `sprite_billboard_draw` (`0x80044830`, `0x8005b708[3]`): genera quad `POLY_FT4` proyectado por GTE con centro/vista activos.
     - `draw_bg_tile` (`0x80016a60`): fondo/horizonte `TILE` `512x216` usando `horizon_y` con `0xaa` (`DAT_80060884 * sin(rx) * 0xaa >> 0x14`), `0x6c` y `letterbox_level * 0x78 >> 3`.
     - `draw_screen_fade` (`0x80016b08`): `POLY_F4` de fundido sobre `0..512 × -12..228` relativo al `DrawEnv` `y=12`.
     - **4 límites de clipping pantalla `0x00d90200` (`512 × 217`):** `0x80041bf0`, `0x80041fa0` (`FUN_80041e5c`), `0x80045154` (`FUN_80044f54`) y `0x800453dc` (`draw_particles` `0x80045218`).
+
+### 2026-11-15 — Verificación viva del Experimento `007` y cierre estático de Fase 3 (`RNG`, `PadState`, cámaras/renders especiales)
+
+- **Resultados dinámicos de [007-gool-hud-y-entidades.md](re/experiments/007-gool-hud-y-entidades.md) (BIOS `870563ba...`, `OpenBIOS PCSX-Redux build 561`, nivel `0x1e`):**
+  - **Entidades GOOL y delta por movimiento:** `gool_player_ptr` (`0x8005f38c`) == `gool_player_slot` (`0x8006cb10`) = `0x800ad504`, `gool_object_pool` (`0x8006cb14`) = `0x8009fe80`. Al desplazar a Crash entre Pasada 1 y Pasada 2 (`Start`/Pausa):
+    - `zone`: `0x800d5830 -> 0x800fd860`
+    - `pos (+0x60..+0x68)`: `(9414656, 1723645, 14018560) -> (10926080, 2287103, 9566208)` (reflejado idéntico en `player_pos_copy` `0x8005f494..9c`)
+    - `rot (+0x6c..+0x74)`: `(0, 442, 0) -> (0, 3936, 0)` | `anim_seq (+0xe8)`: `0x80184300 -> 0x801841d4` | `anim_frame (+0xec)`: `2560 -> 5376 -> 17664` (`>>8 = 69`).
+  - **REGLA OBLIGATORIA PARA FASE 6 (interpolación):** aunque un barrido plano de los 96 slots de `gool_object_pool` (`0x8009fe80`, stride `0x23c`) contó **55** slots con `+0x04 == 3` en ambas pasadas, el recorrido real del árbol arrojó cuentas exactas contra los `96 + 1 = 97` objetos totales: **15** activos en `gool_root_buckets` (`0x8006cb18..0x8006cb57`) + **82** en `gool_free_bucket` (`0x8006cb58`) = `97` en reposo; y **33** activos (incluidos nodos UI en `bucket[7]`) + **64** en `0x8006cb58` = `97` en Pausa. Como confirma estáticamente `FUN_80019e08` (`0x80019e08`), liberar un objeto lo devuelve a `0x8006cb58` **sin limpiar `+0x04`** (`= 3`). **En Fase 6 es obligatorio recorrer las 8 cubetas raíz (`0x8006cb18..0x8006cb57`) siguiendo `+0x4c first_child` / `+0x48 next_sibling`** y nunca escanear `gool_object_pool` por `+0x04 == 3`, para no interpolar objetos liberados. *(Nota de precisión: en `gool_physics_step(obj, a1, a2)`, `a1` `sp+0x18` solo contiene datos previos válidos en la rama de objeto portador/vehículo; para nodos ordinarios conserva contenido de pila).*
+  - **`DisplayContext`, HUD 2D y aspecto `-5/8`:**
+    - `DISPENV (+0x2018)`: `512x240` verificados en buffer `0` (`0x8006345c`, `x=0`) y `1` (`0x800654f0`, `x=512`); `DRAWENV (+0x202c)`: `clip=(0|512, 12, 512, 216)`, `ofs=(0|512, 12)`, `isbg=1`; `quant_ticks (+0x14) = 34 (0x22)`.
+    - `tbreak` confirmados en vivo: `gool_object_tick` (`0x8001c718`), `gool_physics_step` (`0x8001d63c`), `render_queue_flush` (`0x8003db94`), `draw_letterbox_and_fov` (`0x80016c58`, `geom_screen=288`), `quantize_frame_ticks` (`0x80016f04`, `a0=34/35`), `draw_bg_tile` (`0x80016a60` en nivel con `level_flags=0x0c01ffff`, `a2=512, a3=216`, omitido en Pausa `0x0401dffe`), **`hud_transform_2d` (`0x80044558`)** en Pausa (`ra=0x8003dc9c, gp=0x800a2fa8`) y **`matrix_aspect_scale_local` (`0x80043090 -> 0x80043088`)** encadenada (`ra=0x800444c8` y `ra=0x80044564`) escalando la matriz GTE exactamente por `-5/8` en fila Y (`0x0d80 -> 0xf790`, `-3456*5/8 = -2160`; `0x055b -> 0xfca8`, `-1371*5/8 = -856`) y negando fila Z (`0x1333 -> 0xffffeccd`, `0x0640 -> 0xfffff9c0`).
+
+- **Cierre estático de Fase 3 — Generadores aleatorios (`RNG` para `tools/regress`):**
+  - Dos LCG idénticos estilo POSIX (`seed = seed * 0x41c64e6d + 0x3039; u = (seed / 0xf) % 0x7ffffff; return (int)u % mod`, `0` si `mod == 0`):
+    - **LCG A (`rng_a_seed @ 0x8005f220`, `.sdata=1`):** `rng_a_init` (`0x8003155c`, llamada en `sys_init @ 0x8001567c`, fija `0x3039`), `rng_a_seed_set` (`0x8003156c`, llamada en `demo_playback_init @ 0x8002fd24` con `*(DAT_8005f3d8 + 4)`) y `rng_a_mod` (`0x8003147c`). En `SCUS_941.54` no hay llamadas directas (`jal`/punteros) a `0x8003147c`, y en vivo en nivel `0x1e` (`007`) `0x8005f220` se mantuvo en `0x00003039`.
+    - **LCG B (`rng_b_seed @ 0x8005f224`, `.sdata=1`):** `rng_b_init` (`0x80031658`, `= 0x3039`, `0` xrefs en `SCUS`) y **`rng_b_mod` (`0x80031578`)** con 6 llamadores en `SCUS_941.54`: `demo_attract_pick` (`0x8002fef4`), prioridad/selección SPU (`0x80032a5c`), nombre/ID aleatorio de guardado Memory Card `0..999998` (`0x800354b8`, `0x8003699c`) y helpers MC (`0x80035ac4`, `0x80035bc4`). En vivo en `007`, `0x8005f224` cambió entre sesiones (`0x237c228a -> 0xaf1cf0fb`). *(Nota de auditoría: `0x8003df10..0x800417c8` y `0x80043778/8c` usan `+0xa8($gp)` sobre `$gp` = contexto local/scratchpad de renderizado SVTX/WGEO, no `0x8005f224`.)*
+    - **LCG visual aislado:** `draw_water_ripples` (`0x80044f54`) y `draw_particles` (`0x80045218`) usan constantes visuales fijas locales por cuadro (`0x30125400`/`0x493583fe`) sin estado persistente de juego.
+
+- **Cierre estático de Fase 3 — Entrada procesada (`PadState`) y reproducción de demos:**
+  - `pad_init` (`0x80015828(2)`, llamada desde `sys_init 0x80015614`) fija `pad_count` (`0x8006991c`) = `2`, limpia estructuras y registra `InitPAD(&0x80069920, 0x22, &0x8006996c, 0x22)`, `StartPAD()` y `ChangeClearPAD(0)`.
+  - **`PadState` (`2` × `0x4c` = `76` B, en `0x80069920` Pad 1 y `0x8006996c` Pad 2):** actualizado por `pad_update` (`0x800158e0`):
+    - `+0x00..+0x21` (`34` B): buffer DMA crudo (`+0x00 raw_stat`, `+0x01 pad_type`, `+0x02..+0x03` botones crudos activo-bajo, `+0x06/+0x07` analógico Y/X calibrado con `0x8006cdd0..0x8006cde4`).
+    - `+0x24` (`0x80069944`): `buttons_pressed` (`held & ~prev1 & 0xffff`).
+    - `+0x28` (`0x80069948`): `buttons_held` (activo-alto, remapeo DualShock `'S'`, máscara `0x0f17` si entrada congelada, acoplo D-pad↔`0xf000` con tabla `0x8005b440`).
+    - `+0x2c`: `buttons_prev1` | `+0x30`: `buttons_pressed_prev` | `+0x34`: `buttons_prev2`.
+    - `+0x38`: `stick_angle` (`0..4095`) | `+0x3c`: `stick_mag` (`<0x66 -> 0`) | `+0x40`: `dir_index` (`0..7`, `8` neutro).
+  - Pad 1 refleja `mag/angle` en `0x8006cd60`/`0x8006cd64`. Con **`demo_mode` (`0x8006cd14`)**: `0` juego normal (`007`), `2` reproducción (`demo_playback_init 0x8002fcf8` carga `DAT_8005f3d8`, siembra `0x8005f220`, inyecta entradas desde cursor `0x8005f374` y restaura `*(disp_ctx_front+0x14)` / `rcnt2_tick_count`), `3` selección aleatoria (`demo_attract_pick 0x8002fe58`). Lectores principales de `+0x24/+0x28`: `main_loop`, `0x80026ca0`, `0x800237f8`, `0x80036fac`.
+
+- **Cierre estático de Fase 3 — Cámaras especiales, shaders WGEO y pasadas condicionales:**
+  - **Barrido completo PsyQ en `SCUS_941.54` (`0x80010000..0x80046800`):** todos los modos (niveles a pie, vehículos, persecuciones, bonus y jefes) pasan por el mismo camino de salida (`DrawOTag` 1 xref, `PutDispEnv` 2, `PutDrawEnv` 3, `SetGeomScreen` 4, `SetGeomOffset` 2).
+  - **Máquina de estados de cámara (`cam_mode_dispatch @ 0x80026ca0`, llamada en `main_loop 0x80011b60`):**
+    - `DAT_8005b994`: `5` normal; `6` `0x80022a5c` (paneo interpolado multicuadro `0x8005ba14/18/1c..`); `7` `0x80022e74` (hold/warp); `9` `0x80022f58`.
+    - Con `DAT_8005b994 == 5`, `switch (DAT_800608f0)` (prop `0x29`): `0` `0x8002271c`; `2` `cam_mode_rail_chase` (`0x80022878`, lookahead/persecución con prop `0x160`); `3` `cam_mode_scaled_follow` (`0x80022314`, escala X `*5>>3` si `*(DAT_8006759c+8)==3`); `4` `cam_mode_polar_360` (`0x80021a08`, polar 360°/jefes en torno a `0x8005bb00/08`); `8` `0x800225c0`; `10` `cam_mode_fixed_aim` (`0x80021f4c`, fijo/torreta con `ratan2` sobre `0x8005bb3c/44`); `default` `cam_zone_switch` (`0x800200a8`).
+    - Matrices espejo/reflejo opcionales `0x800607b4`/`0x800607d4` cuando `*(current_zone_entry+0x10)+0x29c & 0x1000`, y override de control vehículo `DAT_8006cbb4` (`0` si `DAT_80062ad8 & 0x400`, vs `0x100` normal en `gool_physics_step`).
+  - **Shaders WGEO y pasadas especiales (`zone_gfx_mode_apply @ 0x80020a24`, prop `0x185` -> `DAT_80062ad8` y `level_flags 0x8006cb94`):** conmuta los 5 punteros estáticos en `DAT_80062a28..38` (incluyendo oscuridad/luciérnaga `&0x100` con `0x8006cd50`, flags `0x800004`, `0x200`, `0x8000`, `8`, `0x20`, `0x200000`, `0x40` y rayos `DirnD` `level_flags & 0x1000000`) y controla tres pasadas condicionales de render: `draw_water_ripples` (`0x80044f54`, `&0x10`, clip `0xd90200`), `draw_particles` (`0x80045218`, `&0x400000`, clip `0xd90200`) y `vram_backbuf_copy` (`0x8002706c`, `level_flags & 0x40000`, `MoveImage` `(0,0x108,w,0xf0)` en `frame_end_sync`).
+
+- **Propuesta de estructuras para `re/structs.h` (pendiente de promoción humana):**
+  ```c
+  /* PadState (0x4c bytes): 0x80069920 (Pad 1), 0x8006996c (Pad 2) */
+  typedef struct PadState {
+      uint8_t  raw[0x22];              /* +0x00: +0x00 raw_stat, +0x01 pad_type, +0x02..03 digital, +0x06..07 analogo Y/X */
+      uint16_t _pad22;
+      uint32_t buttons_pressed;        /* +0x24: held & ~prev1 & 0xffff */
+      uint32_t buttons_held;           /* +0x28 */
+      uint32_t buttons_prev1;          /* +0x2c */
+      uint32_t buttons_pressed_prev;   /* +0x30 */
+      uint32_t buttons_prev2;          /* +0x34 */
+      int32_t  stick_angle;            /* +0x38: 0..4095 */
+      int32_t  stick_mag;              /* +0x3c: <0x66 -> 0 */
+      int32_t  dir_index;              /* +0x40: 0..7, 8 = neutro */
+      uint32_t _unk44;                 /* +0x44 */
+      uint32_t _unk48;                 /* +0x48 */
+  } PadState;
+
+  /* GoolObject (0x23c bytes en 0x8006cb14; jugador 0x33c bytes en 0x8006cb10).
+     IMPORTANTE Fase 6: iterar las 8 cubetas 0x8006cb18..0x8006cb57, nunca el pool plano. */
+  typedef struct GoolObject {
+      int32_t  handle;                 /* +0x00: 0 libre, 1 objeto, 2 cubeta */
+      int32_t  node_kind;              /* +0x04: 3 activo (no se limpia al liberar) */
+      void    *meta_ptr;               /* +0x08 */
+      void    *gool_entry;             /* +0x0c */
+      uint8_t  _unk10[0x08];
+      void    *zone_entry;             /* +0x18 */
+      uint8_t  _unk1c[0x24];           /* +0x20..+0x3f color/tinte */
+      struct GoolObject *self;         /* +0x40 */
+      struct GoolObject *parent;       /* +0x44 */
+      struct GoolObject *next_sibling; /* +0x48 */
+      struct GoolObject *first_child;  /* +0x4c */
+      uint8_t  _unk50[0x08];
+      struct GoolObject *rider;        /* +0x58 */
+      uint32_t _unk5c;
+      int32_t  pos[3];                 /* +0x60..+0x68: fijo << 8 */
+      int32_t  rot[3];                 /* +0x6c..+0x74: 4096 = vuelta */
+      int32_t  scale[3];               /* +0x78..+0x80: 0x1000 = 1.0 */
+      int32_t  vel[3];                 /* +0x84..+0x8c */
+      int32_t  target_rot[3];          /* +0x90..+0x98 */
+      uint8_t  _unk9c[0x0c];
+      uint32_t status_flags_a;         /* +0xa8 */
+      uint32_t status_flags_b;         /* +0xac */
+      uint8_t  _unkb0[0x08];
+      int32_t  entity_id;              /* +0xb8 */
+      uint32_t *gool_sp;               /* +0xbc */
+      uint32_t *gool_pc;               /* +0xc0 */
+      uint32_t _unkc4;
+      uint32_t *pending_pc;            /* +0xc8 */
+      uint8_t  _unkcc[0x1c];
+      uint8_t *anim_seq;               /* +0xe8: *anim_seq = 1 SVTX, 2 sprite, 4 texto3D, 5 frag */
+      int32_t  anim_frame;             /* +0xec: fijo << 8 */
+      uint8_t  _unkf0[0x28];           /* +0xf0 subentry, +0xfc floor_y */
+      int32_t  ot_depth_bias;          /* +0x118 */
+      uint32_t _unk11c;
+      uint8_t  render_mode;            /* +0x120 */
+      uint8_t  draw_type;              /* +0x121 */
+      uint8_t  light_mode;             /* +0x122 */
+      uint8_t  _unk123[0x119];
+  } GoolObject;
+  ```
 
 ---
 
