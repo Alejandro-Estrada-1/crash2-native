@@ -1,0 +1,105 @@
+NOTICE — crash2-native
+======================
+
+1. Aviso sobre el juego y activos protegidos
+--------------------------------------------
+Este repositorio y las compilaciones o paquetes binarios que de él se distribuyan
+NO incluyen ROMs, imágenes de disco (.bin, .cue, .chd, .iso), volcados de BIOS
+propietaria de Sony ni código, arte, audio o activos de *Crash Bandicoot 2:
+Cortex Strikes Back* (Sony Computer Entertainment / Naughty Dog).
+
+Para generar y ejecutar el port de forma local, cada persona usuaria debe aportar
+su propia copia legítima del disco (SCUS-94154).
+
+
+2. Código original de crash2-native
+-----------------------------------
+El código fuente, herramientas y documentación propios de este repositorio
+(`src/`, `tools/`, `scripts/`, `re/`, `patches/`, `docs/`) se publican bajo la
+licencia MIT (ver `LICENSE`), Copyright (c) 2026 Alejandro Estrada.
+
+
+3. Submódulo psxrecomp (PolyForm Noncommercial License 1.0.0)
+-------------------------------------------------------------
+Este proyecto enlaza y utiliza el framework `psxrecomp/` bajo los términos de la
+**PolyForm Noncommercial License 1.0.0**:
+
+  https://polyformproject.org/licenses/noncommercial/1.0.0
+
+El texto completo se conserva en `psxrecomp/LICENSE`. Todo binario compilado o
+distribución que enlace con `psxrecomp` queda restringido exclusivamente a usos
+**no comerciales** y debe conservar estos términos/URL junto con los avisos de
+terceros requeridos.
+
+
+4. Submódulo recomp-ui y recursos integrados
+--------------------------------------------
+- **recomp-ui** (`recomp-ui/`): MIT License, Copyright (c) 2026 Matthew Stanley
+  (`recomp-ui/LICENSE`).
+- **Dear ImGui** (`recomp-ui/src/third_party/imgui/`): MIT License,
+  Copyright (c) 2014-2025 Omar Cornut (`recomp-ui/src/third_party/imgui/LICENSE.txt`).
+- **tinyfiledialogs** (`recomp-ui/src/third_party/tinyfiledialogs.{c,h}`):
+  zlib License, Copyright (c) 2014 - 2025 Guillaume Vareille.
+- **stb** (`stb_image.h`, `stb_image_write.h`, `stb_truetype.h`):
+  MIT OR Public Domain (Unlicense), Sean Barrett.
+- **Fuentes e íconos del lanzador** (`recomp-ui/assets/common/fonts/NOTICE.md` y
+  `recomp-ui/assets/common/img/NOTICE.md`):
+  - **OpenMoji** (`OpenMoji-black-glyf.ttf`): Copyright © OpenMoji Project —
+    Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0,
+    https://creativecommons.org/licenses/by-sa/4.0/).
+  - **Noto Sans Symbols 2** (`NotoSansSymbols2-Regular.ttf`) y **`flags.png`**
+    (renderizado desde Noto Color Emoji): Copyright © The Noto Project Authors —
+    SIL Open Font License 1.1 (OFL-1.1, https://scripts.sil.org/OFL).
+  - **LatoLatin** (`LatoLatin-Regular.ttf`, `LatoLatin-Bold.ttf`):
+    Copyright (c) 2010-2015, Łukasz Dziedzic (Reserved Font Name "Lato") —
+    SIL Open Font License 1.1 (OFL-1.1).
+
+
+5. Componentes de terceros vía psxrecomp
+----------------------------------------
+Los textos y avisos íntegros se encuentran en `psxrecomp/THIRD_PARTY_ATTRIBUTION.md`,
+`psxrecomp/bios/OpenBIOS.LICENSE` y `psxrecomp/runtime/licenses/` (todo paquete
+para usuarios finales debe conservar dicho directorio `licenses/` y `OpenBIOS.LICENSE`):
+
+- **OpenBIOS** (`psxrecomp/bios/openbios.bin`): MIT License,
+  Copyright (c) 2019 PCSX-Redux authors (incluye código con licencias permisivas de
+  `uC-sdk`; ver `psxrecomp/bios/OpenBIOS.LICENSE`).
+- **SDL3** (`psxrecomp/third_party/deps.manifest`): zlib License.
+- **zlib** (`psxrecomp/third_party/deps.manifest`): zlib License.
+- **libchdr** (`psxrecomp/runtime/licenses/libchdr-NOTICES.txt`): BSD-3-Clause
+  (Romain Tisserand and contributors), con descompresores integrados Zstandard
+  (dual BSD-3-Clause / GPL-2.0), LZMA SDK (dominio público) y miniz (MIT).
+- **libwebp 1.6.0** (`psxrecomp/runtime/licenses/libwebp-NOTICES.txt`):
+  BSD-3-Clause (Google Inc. and WebM contributors).
+- **json11** (`psxrecomp/runtime/licenses/json11-LICENSE.txt`): MIT License,
+  Copyright (c) 2013 Dropbox, Inc.
+- **toml11** (`psxrecomp/runtime/licenses/toml11-NOTICES.txt`): MIT License
+  (Toru Niina).
+- **stb_image** (`psxrecomp/runtime/licenses/stb_image-NOTICES.txt`):
+  MIT OR Public Domain (Unlicense), Sean Barrett.
+- **xxHash 0.8.3** (`psxrecomp/runtime/licenses/xxhash-NOTICES.txt`):
+  BSD-2-Clause (Yann Collet).
+- **Filtro xBR** (`runtime/src/gpu_gl_renderer.c`): MIT License,
+  Copyright (C) 2011-2016 Hyllian - sergiogdb@gmail.com.
+- **JRickey/gba-recomp** (`ShadowVerifier` y color LUT): dual MIT OR Apache-2.0.
+- **retcomm-studio** (`tools/new_project_layout/`): MIT License (Alex Vanderveen).
+- **Solo herramientas de generación / recompilador**: `rabbitizer` (MIT), `ELFIO`
+  (MIT) y `{fmt}` (MIT).
+- **Componentes opcionales de compilación** (solo aplican si se activan
+  explícitamente en la configuración de CMake/toolchain):
+  - `libjuice` (`PSX_NETPLAY=ON`): MPL-2.0 (`libjuice-NOTICES.txt`).
+  - `OpenXR-SDK` + `JsonCpp` (`PSX_OPENXR=ON`): Apache-2.0 / MIT (`OpenXR-SDK-NOTICES.txt`).
+  - `TinyCC` (subproceso externo opcional para overlays): LGPL-2.1 (`TinyCC-LICENSE.txt`).
+
+
+6. Compilador portable y herramientas para AppImage
+---------------------------------------------------
+Cuando un release en formato **AppImage** incluya el compilador **Zig** para
+generar y compilar el binario nativo en la máquina de la persona usuaria:
+- **Zig** se distribuye bajo licencia **MIT** (junto con los avisos propios de su
+  paquete oficial y biblioteca estándar/LLVM integrados en dicha distribución).
+- Cualquier ejecutable del juego producido al compilar contra `psxrecomp` sigue
+  regido por la **PolyForm Noncommercial License 1.0.0**.
+- Si el AppImage incluye además herramientas de compilación portables (como
+  CMake o Ninja) o bibliotecas compartidas del sistema en `usr/lib`, sus avisos y
+  licencias se conservarán dentro del propio paquete junto a `NOTICE` y `licenses/`.
