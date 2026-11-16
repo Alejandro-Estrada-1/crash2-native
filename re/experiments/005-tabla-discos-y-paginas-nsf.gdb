@@ -1,36 +1,36 @@
-# Experimento 005 — Tabla CD ISO9660 y sistema de paginacion dinamica NSD/NSF
+# Experiment 005 — ISO9660 CD table and dynamic NSD/NSF paging system
 #
-# Precondicion: PCSX-Redux corriendo (sin pausa del emulador) con Crash Bandicoot 2
-#               (SCUS-94154) cargado en cualquier pantalla jugable o titulo (preferible
-#               slot 1 en el primer nivel, S1/S0000010, o pantalla de titulo S3/S000003C);
-#               servidor GDB activo.
-# BIOS: OpenBIOS (registrar version/SHA-256 al ejecutar)
-# Modulo: main (SCUS-941.54)
-# Hipotesis:
-#   1. iso9660_scan_levels (0x800316ec) poblo disc_file_table en 0x80069034 con los
-#      LBA y tamanos ISO9660 exactos de cada par Sxxxxxxx.NSD/.NSF (stride 12 bytes).
-#   2. level_load (0x80014c68) mantiene el nivel activo en nsd_paging_state (0x80067588):
-#      active=1, current_level_id (0x8005f3ec) coincide con nsd_paging_state+0x4,
-#      nsf_base_lba (0x800675a8) coincide con disc_file_table[level_id].w2 & 0xffffff,
-#      y asigna buffers dinamicos en el heap (>= 0x8006f1f4) incluyendo N paginas fisicas
-#      contiguas de 64 KiB (<= 21) en 0x800675b4.
-#   3. Las paginas NSF cargadas en RAM contienen datos/chunks (magic 0x1234 cuando type!=1),
-#      y el marco de ejecucion activo conserva cuantizacion de ticks multiple de 0x11 en
-#      *(DAT_80063450 + 0x14) escrita por quantize_frame_ticks (0x80016f04).
-# Exito:
-#   - disc_file_table en 0x02, 0x10 y 0x3c coincide exactamente con los LBA/tamanos del ISO:
+# Precondition: PCSX-Redux running (unpaused) with Crash Bandicoot 2
+#               (SCUS-94154) loaded on any playable screen or title (preferably
+#               slot 1 in the first level, S1/S0000010, or title screen S3/S000003C);
+#               GDB server active.
+# BIOS: OpenBIOS (record version/SHA-256 on execution)
+# Module: main (SCUS-941.54)
+# Hypothesis:
+#   1. iso9660_scan_levels (0x800316ec) populated disc_file_table at 0x80069034 with the
+#      exact ISO9660 LBAs and sizes of each Sxxxxxxx.NSD/.NSF pair (12-byte stride).
+#   2. level_load (0x80014c68) tracks the active level in nsd_paging_state (0x80067588):
+#      active=1, current_level_id (0x8005f3ec) matches nsd_paging_state+0x4,
+#      nsf_base_lba (0x800675a8) matches disc_file_table[level_id].w2 & 0xffffff,
+#      and allocates dynamic buffers in the heap (>= 0x8006f1f4) including N contiguous
+#      64 KiB physical pages (<= 21) at 0x800675b4.
+#   3. The NSF pages loaded in RAM contain data/chunks (magic 0x1234 when type!=1),
+#      and the active execution frame keeps tick quantization a multiple of 0x11 in
+#      *(DAT_80063450 + 0x14) written by quantize_frame_ticks (0x80016f04).
+# Success:
+#   - disc_file_table at 0x02, 0x10 and 0x3c matches the exact ISO LBAs/sizes:
 #       0x02 (0x8006904c): nsd_lba=0x00e029 (57385), nsd_size=0x016d4 (5844), nsf_lba=0x00e02c (57388)
 #       0x10 (0x800690f4): nsd_lba=0x000019 (25),    nsd_size=0x01524 (5412), nsf_lba=0x00001c (28)
 #       0x3c (0x80069304): nsd_lba=0x00dc66 (56422), nsd_size=0x00cd4 (3284), nsf_lba=0x00dc68 (56424)
-#   - nsd_paging_state+0x0 == 1, +0x4 == current_level_id, +0x20 == nsf_lba del nivel activo,
-#     num_phys_pages <= 21, num_virt_pages == 0x25 (37), nsd_buf >= 0x8006f1f4 y cada slot
-#     fisico cargado apunta a nsd_pool + i * 0x10000.
-#   - *(DAT_80063450 + 0x14) es multiplo de 0x11 (tipicamente 0x11 o 0x22).
-# Fallo:
-#   - Tabla 0x80069034 vacia o con LBAs distintos a los del disco ISO9660.
-#   - nsd_paging_state inconsistente, buffers fuera del rango del heap o timeout de conexion.
+#   - nsd_paging_state+0x0 == 1, +0x4 == current_level_id, +0x20 == active level nsf_lba,
+#     num_phys_pages <= 21, num_virt_pages == 0x25 (37), nsd_buf >= 0x8006f1f4 and each
+#     loaded physical slot points to nsd_pool + i * 0x10000.
+#   - *(DAT_80063450 + 0x14) is a multiple of 0x11 (typically 0x11 or 0x22).
+# Failure:
+#   - Table 0x80069034 empty or with LBAs differing from the ISO9660 disc.
+#   - Inconsistent nsd_paging_state, buffers outside heap range, or connection timeout.
 #
-# Escribe en memoria: no (solo lectura; sin continue/breakpoints para evitar SIGTRAP en 0x80000080)
+# Writes memory: no (read-only; no continue/breakpoints to avoid SIGTRAP at 0x80000080)
 
 set pagination off
 set print pretty off

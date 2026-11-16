@@ -1,14 +1,14 @@
 -- ------------------------------------------------------------------
--- Experimento 008 (parte 2): Muestreo en tiempo real de PadState (0x80069920)
--- y semillas RNG (0x8005f220 / 0x8005f224) durante movimiento real en PCSX-Redux.
+-- Experiment 008 (part 2): Real-time sampling of PadState (0x80069920)
+-- and RNG seeds (0x8005f220 / 0x8005f224) during live movement in PCSX-Redux.
 --
--- Precondicion: PCSX-Redux corriendo Crash Bandicoot 2 (SCUS-94154) dentro de un
---               nivel jugable (sin pausa al empezar). Cargar/ejecutar en Consola
---               Lua de PCSX-Redux y, durante ~1.5 s (45 cuadros logicos), mover
---               el D-pad/stick y pulsar un boton (p. ej. X o Cuadrado).
--- Salida:       Consola Lua de PCSX-Redux + /tmp/exp008_pad_state.txt (si io.open
---               esta disponible).
--- Escribe en memoria: no (solo lectura desde PCSX.getMemPtr()).
+-- Precondition: PCSX-Redux running Crash Bandicoot 2 (SCUS-94154) inside a
+--               playable level (unpaused at start). Load/execute in the PCSX-Redux
+--               Lua Console and, during ~1.5 s (45 logical frames), move the
+--               D-pad/stick and press a button (e.g. Cross or Square).
+-- Output:       PCSX-Redux Lua Console + /tmp/exp008_pad_state.txt (if io.open
+--               is available).
+-- Writes memory: no (read-only via PCSX.getMemPtr()).
 -- ------------------------------------------------------------------
 
 local ffi = require('ffi')
@@ -38,7 +38,7 @@ local function r_i32(va)
     return tonumber(i32[bit.rshift(phys(va), 2)])
 end
 
--- Limpia un muestreo anterior si el script se recarga.
+-- Clear any previous sampling hook if the script is reloaded.
 if _G.__exp008_pad_bp ~= nil then
     pcall(function() _G.__exp008_pad_bp:remove() end)
     _G.__exp008_pad_bp = nil
@@ -115,7 +115,7 @@ bp = PCSX.addBreakpoint(0x8001645c, 'Exec', 4, 'exp008_pad_sample', function()
         end
     end
 
-    -- Retorna true para no pausar PCSX-Redux en ningun cuadro.
+    -- Return true so PCSX-Redux does not pause on any frame.
     return true
 end)
 

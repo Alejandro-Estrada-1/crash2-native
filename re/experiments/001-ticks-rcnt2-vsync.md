@@ -1,16 +1,18 @@
-# Resultado — Experimento 001: Ticks de `DAT_8003bea4` entre dos VSync
+English | [Español](001-ticks-rcnt2-vsync.es.md)
 
-- **Fecha:** 2026-11-15
+# Result — Experiment 001: `DAT_8003bea4` Ticks Between Two VSyncs
+
+- **Date:** 2026-11-15
 - **Script:** `re/experiments/001-ticks-rcnt2-vsync.gdb`
-- **Comando:**
+- **Command:**
   ```bash
   PSX_GDB_PORT=3333 PSX_GDB_TIMEOUT=60 scripts/gdb-psx -batch -x re/experiments/001-ticks-rcnt2-vsync.gdb
   ```
-- **Entorno:** PCSX-Redux Build `561` (`61e3086f`), CPU intérprete, depurador activo, GDB `:3333`.
-- **Precondición:** Slot 1 cargado en el primer nivel, Crash quieto.
-- **Estado de salida:** `exit 0`, `[Inferior 1 (process 1) detached]` (sin cuelgues ni pausas residuales).
+- **Environment:** PCSX-Redux Build `561` (`61e3086f`), interpreter CPU, debugger enabled, GDB `:3333`.
+- **Precondition:** Slot 1 loaded in the first level, Crash standing still.
+- **Exit status:** `exit 0`, `[Inferior 1 (process 1) detached]` (no hangs or residual pauses).
 
-## Salida observada
+## Observed Output
 
 ```text
 cuadro 00 @0x80016840: DAT_8003bea4=0x0002459a (148890)  (referencia inicial)
@@ -28,7 +30,7 @@ cuadro 11 @0x80016840: DAT_8003bea4=0x00024715 (149269)  delta_frame=34
 cuadro 12 @0x80016840: DAT_8003bea4=0x00024738 (149304)  delta_frame=35
 ```
 
-## Análisis
+## Analysis
 
-- En los 12 cuadros medidos, `DAT_8003bea4` avanzó `149304 - 148890 = 414` ticks, es decir **`34.50` ticks por cuadro** (alternando `34` y `35`), exactamente `2 * 17.25` ticks/VSync, lo cual concuerda con la tasa esperada del supuesto `SysClk/8` (~`1033.6 Hz`, ~`17.2` ticks por VSync NTSC de 60 Hz y ~`34.4` ticks por cuadro de 30 Hz).
-- El breakpoint en `0x80016868` no saltó en ninguno de los 12 cuadros porque la escena del primer nivel tardó más de 1 VSync antes de `0x80016838`, de modo que al retornar `VSync(0)` en `0x80016840` ya habían pasado ~34–35 ticks (`>= 0x19`) y no hizo falta la espera extra. Por ello, la medición directa de `delta_1_vsync` (`0x80016868 -> 0x80016870`) queda pendiente para una escena más ligera (p. ej. menú/pausa).
+- Across the 12 measured frames, `DAT_8003bea4` advanced `149304 - 148890 = 414` ticks, i.e. **`34.50` ticks per frame** (alternating `34` and `35`), exactly `2 * 17.25` ticks/VSync, matching the expected rate of the assumed `SysClk/8` (~`1033.6 Hz`, ~`17.2` ticks per 60 Hz NTSC VSync and ~`34.4` ticks per 30 Hz frame).
+- The breakpoint at `0x80016868` did not hit in any of the 12 frames because the first-level scene took more than 1 VSync before `0x80016838`, so when `VSync(0)` returned at `0x80016840`, ~34–35 ticks (`>= 0x19`) had already elapsed and the extra wait was unnecessary. Therefore, direct measurement of `delta_1_vsync` (`0x80016868 -> 0x80016870`) remains pending for a lighter scene (e.g. menu/pause).

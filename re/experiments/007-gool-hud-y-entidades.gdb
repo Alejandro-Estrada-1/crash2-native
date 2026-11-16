@@ -1,35 +1,35 @@
 # ------------------------------------------------------------------
-# Experimento 007: Entidades GOOL, DispEnv/DrawEnv, HUD 2D y aspecto 5/8
+# Experiment 007: GOOL entities, DispEnv/DrawEnv, 2D HUD and 5/8 aspect
 #
-# Precondicion:  PCSX-Redux corriendo (sin pausa) con Crash Bandicoot 2 (SCUS-94154)
-#                cargado en un nivel jugable (idealmente con Crash movible y/o HUD o
-#                pantalla de pausa visible para disparar hud_transform_2d 0x80044558).
-# BIOS:          OpenBIOS (registrada automaticamente por scripts/gdb-psx)
-# Modulo:        main (SCUS_941.54)
-# Hipotesis:
-#   1. En runtime, gool_player_ptr (0x8005f38c) apunta a gool_player_slot (0x8006cb10,
-#      Crash), gool_object_pool (0x8006cb14) contiene los slots dinamicos y las 8 cubetas
-#      raiz gool_root_buckets (0x8006cb18..0x8006cb57) enlazan nodos activos (+0x04 == 3)
-#      con pos (+0x60..+0x68), rot (+0x6c..+0x74), scale (+0x78..+0x80), anim_seq (+0xe8)
-#      y anim_frame (+0xec) coherentes, actualizados por gool_object_tick (0x8001c718)
-#      y gool_physics_step (0x8001d63c), y dibujados via render_queue_flush (0x8003db94).
-#   2. En disp_ctx_front (0x80063450), +0x2018 contiene DISPENV (512x240) y +0x202c
-#      contiene DRAWENV (clip 512x216, y=12, ofs_y=12), junto a +0x14 quant_ticks.
-#   3. draw_letterbox_and_fov (0x80016c58) y quantize_frame_ticks (0x80016f04) se ejecutan
-#      cada cuadro dentro de frame_end_sync (0x8001645c). Con cielo activo (0x8006cb94 &
-#      0x2000) salta draw_bg_tile (0x80016a60), y con HUD visible/pausa salta
-#      hud_transform_2d (0x80044558) llamando a matrix_aspect_scale_local (0x80043090,
+# Precondition:  PCSX-Redux running (unpaused) with Crash Bandicoot 2 (SCUS-94154)
+#                loaded in a playable level (ideally with Crash movable and/or HUD
+#                or pause screen visible to trigger hud_transform_2d 0x80044558).
+# BIOS:          OpenBIOS (automatically recorded by scripts/gdb-psx)
+# Module:        main (SCUS_941.54)
+# Hypothesis:
+#   1. At runtime, gool_player_ptr (0x8005f38c) points to gool_player_slot (0x8006cb10,
+#      Crash), gool_object_pool (0x8006cb14) holds dynamic slots and the 8 root
+#      buckets gool_root_buckets (0x8006cb18..0x8006cb57) link active nodes (+0x04 == 3)
+#      with coherent pos (+0x60..+0x68), rot (+0x6c..+0x74), scale (+0x78..+0x80),
+#      anim_seq (+0xe8) and anim_frame (+0xec), updated by gool_object_tick (0x8001c718)
+#      and gool_physics_step (0x8001d63c), and drawn via render_queue_flush (0x8003db94).
+#   2. In disp_ctx_front (0x80063450), +0x2018 holds DISPENV (512x240) and +0x202c
+#      holds DRAWENV (clip 512x216, y=12, ofs_y=12), alongside +0x14 quant_ticks.
+#   3. draw_letterbox_and_fov (0x80016c58) and quantize_frame_ticks (0x80016f04) run
+#      every frame inside frame_end_sync (0x8001645c). With sky active (0x8006cb94 &
+#      0x2000) draw_bg_tile (0x80016a60) triggers, and with HUD/pause visible
+#      hud_transform_2d (0x80044558) triggers calling matrix_aspect_scale_local (0x80043090,
 #      factor 5/8 = 0xa0 >> 8).
-# Exito:
-#   - Crash y nodos activos (+0x04 == 3) en gool_root_buckets muestran pos/rot/scale/anim
-#     coherentes; DISPENV == (w=512, h=240) y DRAWENV == (y=12, w=512, h=216); saltan
-#     gool_object_tick, gool_physics_step, render_queue_flush, draw_letterbox_and_fov y
-#     quantize_frame_ticks (y hud_transform_2d/matrix_aspect_scale_local/draw_bg_tile si
-#     estan activos en la pantalla actual).
-# Fallo:
-#   - Punteros GOOL nulos/corruptos, DISPENV/DRAWENV no coinciden con 512x240 / 512x216 y=12,
-#     o los tbreak principales del bucle de juego no saltan en PSX_GDB_TIMEOUT segundos.
-# Escribe en memoria: no (solo lectura + breakpoints temporales SW; sin escritura al juego)
+# Success:
+#   - Crash and active nodes (+0x04 == 3) in gool_root_buckets show coherent pos/rot/scale/anim;
+#     DISPENV == (w=512, h=240) and DRAWENV == (y=12, w=512, h=216); gool_object_tick,
+#     gool_physics_step, render_queue_flush, draw_letterbox_and_fov and
+#     quantize_frame_ticks hit (and hud_transform_2d/matrix_aspect_scale_local/draw_bg_tile if
+#     active on the current screen).
+# Failure:
+#   - Null/corrupt GOOL pointers, DISPENV/DRAWENV do not match 512x240 / 512x216 y=12,
+#     or the main game-loop tbreaks do not hit within PSX_GDB_TIMEOUT seconds.
+# Writes memory: no (read-only + temporary SW breakpoints; no writes to the game)
 # ------------------------------------------------------------------
 
 set pagination off

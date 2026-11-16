@@ -1,37 +1,37 @@
 # ------------------------------------------------------------------
-# Experimento 006: Codigo MIPS nativo en GOOL (tipo 11, 0x8003aad4) y camara/proyeccion
+# Experiment 006: Native MIPS code in GOOL (type 11, 0x8003aad4) and camera/projection
 #
-# Precondicion:  PCSX-Redux corriendo (sin pausa) con Crash Bandicoot 2 (SCUS-94154)
-#                cargado en pantalla de titulo o nivel jugable (p. ej. nivel activo
-#                0x1e de la sesion), con el servidor GDB activo tras correr 005.
-# BIOS:          OpenBIOS (registrada automaticamente por scripts/gdb-psx)
-# Modulo:        main (SCUS_941.54) + chunks GOOL (tipo 11) en paginas NSF en heap RAM
-# Hipotesis:
-#   1. En runtime existen chunks GOOL (tipo 11) cargados dentro de los slots fisicos
-#      de nsd_paging_state (0x800675b4) cuya seccion sec[1] contiene bytecode 0x49xxxxxx
-#      intercalado con bloques MIPS nativos terminados en 0x03e0a809 (jalr s5, ra) o
+# Precondition:  PCSX-Redux running (unpaused) with Crash Bandicoot 2 (SCUS-94154)
+#                loaded on the title screen or a playable level (e.g. session active
+#                level 0x1e), with GDB server active after running 005.
+# BIOS:          OpenBIOS (automatically recorded by scripts/gdb-psx)
+# Module:        main (SCUS_941.54) + GOOL chunks (type 11) in NSF pages in heap RAM
+# Hypothesis:
+#   1. At runtime, GOOL chunks (type 11) exist loaded inside the physical slots
+#      of nsd_paging_state (0x800675b4) whose sec[1] section contains 0x49xxxxxx bytecode
+#      interleaved with native MIPS blocks terminated by 0x03e0a809 (jalr s5, ra) or
 #      0x03e00008 + 0x34150000 (jr ra; ori s5, zero, 0).
-#   2. gool_interpret (0x8003a014), al despachar el opcode 0x49 por 0x8005c514[0x49],
-#      ejecuta `0x8003aad4: jalr s5` saltando directamente al bloque MIPS en RAM heap
-#      ($s5 dentro del pool >= 0x8006f1f4, $s8 == 0x1f800000, $s0 -> objeto GOOL).
-#   3. Las variables de pantalla/camara/proyeccion reflejan:
-#      - display_ctx_pool: DispEnv 512x240 y DrawEnv 512x216 con y=12;
-#      - geom_screen (0x80060884) tipicamente 0x120 (288), cam_pos (0x800607f4..fc),
-#        cam_rot (0x80060800..08), cam_view_matrix (0x80060774) con fila Y escalada -5/8,
-#        geom_offset_x/y (0x8006cc20/24) y SetGeomOffset centrado en (0x100, 0x6c).
-# Exito:
-#   - Al menos una pagina fisica cargada contiene un chunk GOOL (tipo 11) con sec[1]
-#     que incluye bloques MIPS nativos en RAM.
-#   - El tbreak en 0x8003aad4 salta y muestra $pc == 0x8003aad4, $s8 == 0x1f800000, $s5
-#     apuntando dentro de sec[1] de una pagina NSF residente (>= 0x8006f1f4) e
-#     instrucciones MIPS validas desensambladas desde $s5.
-#   - El tbreak en 0x8004efe8 (SetGeomOffset llamado desde cam_update en 0x80017f70)
-#     muestra $a0 == 0x100 + geom_offset_x y $a1 == 0x6c + (cam_shake_y >> 8) + geom_offset_y.
-# Fallo:
-#   - Ninguna pagina fisica residente contiene tipo 11 con sec[1] MIPS, o bien
-#     $s5 en 0x8003aad4 apunta fuera del heap / a codigo estatico de SCUS_941.54,
-#     o los breakpoints no saltan dentro de PSX_GDB_TIMEOUT segundos.
-# Escribe en memoria: no (temporalmente usa tbreak SW; sin escrituras persistentes al juego)
+#   2. gool_interpret (0x8003a014), when dispatching opcode 0x49 via 0x8005c514[0x49],
+#      executes `0x8003aad4: jalr s5` jumping directly into the MIPS block in heap RAM
+#      ($s5 inside the pool >= 0x8006f1f4, $s8 == 0x1f800000, $s0 -> GOOL object).
+#   3. Display/camera/projection variables reflect:
+#      - display_ctx_pool: DispEnv 512x240 and DrawEnv 512x216 with y=12;
+#      - geom_screen (0x80060884) typically 0x120 (288), cam_pos (0x800607f4..fc),
+#        cam_rot (0x80060800..08), cam_view_matrix (0x80060774) with Y row scaled -5/8,
+#        geom_offset_x/y (0x8006cc20/24) and SetGeomOffset centered at (0x100, 0x6c).
+# Success:
+#   - At least one loaded physical page contains a GOOL chunk (type 11) whose sec[1]
+#     includes native MIPS blocks in RAM.
+#   - tbreak at 0x8003aad4 hits and shows $pc == 0x8003aad4, $s8 == 0x1f800000, $s5
+#     pointing inside sec[1] of a resident NSF page (>= 0x8006f1f4), and valid MIPS
+#     instructions disassembled from $s5.
+#   - tbreak at 0x8004efe8 (SetGeomOffset called from cam_update at 0x80017f70)
+#     shows $a0 == 0x100 + geom_offset_x and $a1 == 0x6c + (cam_shake_y >> 8) + geom_offset_y.
+# Failure:
+#   - No resident physical page contains type 11 with sec[1] MIPS, or
+#     $s5 at 0x8003aad4 points outside the heap / into static code of SCUS_941.54,
+#     or the breakpoints do not hit within PSX_GDB_TIMEOUT seconds.
+# Writes memory: no (temporarily uses SW tbreak; no persistent writes to the game)
 # ------------------------------------------------------------------
 
 set pagination off

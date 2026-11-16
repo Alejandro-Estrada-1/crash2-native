@@ -1,30 +1,31 @@
 # ------------------------------------------------------------------
-# Experimento 002: Frecuencia de 0x80016838 y disparos de 0x80016868
+# Experiment 002: Frequency of 0x80016838 and hits on 0x80016868
 #
-# Precondición:  PCSX-Redux con servidor GDB activo y Dynarec desactivado;
-#                cargar un estado guardado dentro de un nivel jugable (ej.
-#                slot 1: Turtle Woods). Se recomienda ejecutar con
-#                PSX_GDB_TIMEOUT=60 por el número de paradas TCP (~60-120).
-#                Nota: como cada breakpoint detiene la PS1 emulada, el cálculo
-#                de frecuencia usa los ticks emulados de DAT_8003bea4 (que se
-#                pausan junto con la CPU); para capturas largas de minutos sin
-#                pausar cuadros, pasar este conteo a un script Lua.
-# Módulo:        main (0x80016838, 0x80016868, 0x8003bea4, 0x8006ccf0)
-# Hipótesis:     FUN_8001645c llama a VSync(0) en 0x80016838 una vez por cuadro
-#                lógico (~30 Hz en NTSC, ~2067 ticks de DAT_8003bea4 cada 60
-#                cuadros si se confirma ~1033.6 Hz). El VSync(0) extra en
-#                0x80016868 se dispara cuando el cuadro tardó < 0x19 (25) ticks
-#                (~24.2 ms), limitando el juego a 30 Hz en escenas ligeras.
-# Éxito:         En 60 iteraciones consecutivas de 0x80016838:
-#                - delta(DAT_8006ccf0) == 60 (1 llamada a 0x80016838 por cuadro)
-#                - delta(DAT_8003bea4) ≈ 2067 ticks para 60 cuadros (~30 Hz)
-#                - se registra cuántas de las 60 pasadas ejecutaron 0x80016868
-#                  (esperado: mayoría en escena ligera/Crash quieto).
-# Fallo:         El breakpoint en 0x80016838 no salta en PSX_GDB_TIMEOUT
-#                segundos, delta(DAT_8006ccf0) != 60, o la tasa por cuadro
-#                difiere claramente de 30 Hz (p. ej. ~60 Hz si 0x80016868 = 0
-#                y ~17 ticks/cuadro en escena ligera).
-# Escribe en memoria: no
+# Precondition:  PCSX-Redux with GDB server active and Dynarec disabled;
+#                load a save state inside a playable level (e.g.
+#                slot 1: Turtle Woods). Running with PSX_GDB_TIMEOUT=60
+#                is recommended due to the number of TCP stops (~60-120).
+#                Note: since each breakpoint halts the emulated PS1, the
+#                frequency computation uses emulated ticks of DAT_8003bea4
+#                (which pause along with the CPU); for long minute-scale
+#                captures without pausing frames, move this count to a Lua
+#                script.
+# Module:        main (0x80016838, 0x80016868, 0x8003bea4, 0x8006ccf0)
+# Hypothesis:    FUN_8001645c calls VSync(0) at 0x80016838 once per logical
+#                frame (~30 Hz in NTSC, ~2067 ticks of DAT_8003bea4 every 60
+#                frames if ~1033.6 Hz is confirmed). The extra VSync(0) at
+#                0x80016868 fires when the frame took < 0x19 (25) ticks
+#                (~24.2 ms), capping the game at 30 Hz in light scenes.
+# Success:       Over 60 consecutive iterations of 0x80016838:
+#                - delta(DAT_8006ccf0) == 60 (1 call to 0x80016838 per frame)
+#                - delta(DAT_8003bea4) ~= 2067 ticks for 60 frames (~30 Hz)
+#                - record how many of the 60 passes executed 0x80016868
+#                  (expected: majority in light scene / Crash standing still).
+# Failure:       The breakpoint at 0x80016838 does not hit within
+#                PSX_GDB_TIMEOUT seconds, delta(DAT_8006ccf0) != 60, or the
+#                per-frame rate clearly differs from 30 Hz (e.g. ~60 Hz if
+#                0x80016868 = 0 and ~17 ticks/frame in a light scene).
+# Writes memory: no
 # ------------------------------------------------------------------
 
 set $target_frames = 60

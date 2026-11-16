@@ -1,16 +1,16 @@
 # ------------------------------------------------------------------
-# Experimento NNN: <descripción corta>
+# Experiment NNN: <short description>
 #
-# Precondición:  <estado de guardado o pantalla exacta en PCSX-Redux>
-#                p. ej. "slot 1: inicio de Turtle Woods, Crash quieto"
-# BIOS:          <BIOS del emulador, p. ej. OpenBIOS (PCSX-Redux build ..., sha256 <hash> de 0xbfc00000+512KiB)>
-# Módulo:        main | overlay:<id>  (¿está cargado en ese momento?)
-# Hipótesis:     <qué creemos que hace la dirección/función>
-# Éxito:         <qué debe observarse>, p. ej. "el breakpoint salta al girar la cámara
-#                y a0 apunta a una estructura cuyo +0x1c cambia"
-# Fallo:         el breakpoint no salta en PSX_GDB_TIMEOUT segundos,
-#                o <otra observación que descarte la hipótesis>
-# Escribe en memoria: no | sí (guardar estado antes)
+# Precondition:  <exact save state or screen in PCSX-Redux>
+#                e.g. "slot 1: start of Turtle Woods, Crash standing still"
+# BIOS:          <emulator BIOS, e.g. OpenBIOS (PCSX-Redux build ..., sha256 <hash> of 0xbfc00000+512KiB)>
+# Module:        main | overlay:<id>  (is it loaded at that moment?)
+# Hypothesis:    <what we think the address/function does>
+# Success:       <what must be observed>, e.g. "breakpoint hits when turning camera
+#                and a0 points to a struct whose +0x1c changes"
+# Failure:       breakpoint does not hit within PSX_GDB_TIMEOUT seconds,
+#                or <another observation that rules out the hypothesis>
+# Writes memory: no | yes (save state first)
 # ------------------------------------------------------------------
 
 # break *0x80000000
