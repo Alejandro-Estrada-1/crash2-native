@@ -772,3 +772,71 @@
 # al ejecutable original, y entrada ausente del C generado.
 0x8004075C  # tabla de punteros a funciones en 0x8005B6FC (sus vecinos sí estaban generados); relleno nop antes; 1.a instr. mfc2
 0x8003AE24  # tabla de 11 punteros en 0x8005C624 (los otros 10 ya eran alias); entra como función de 0xC bytes
+
+# === INGENIERÍA INVERSA (re/symbols.csv) ====================================
+# Funciones confirmadas en Ghidra + PCSX-Redux (experimentos 003, 007, 008)
+# que no estaban en el escaneo JAL inicial por invocarse vía eventos o tablas.
+0x8003BE88  # rcnt2_tick_isr (OpenEvent RCntCNT2, exp 003)
+0x8001C718  # gool_object_tick (callback de árbol 0x80018dd0, exp 007)
+0x80044558  # hud_transform_2d (tabla 0x8005b690[6/13], exp 007)
+
+# === MECÁNICOS: tablas de punteros estáticos en SCUS_941.54 =================
+# Origen: auditoría estática en Ghidra sobre SCUS_941.54 (re/NOTES.md, 008).
+# Inicios de función independientes (precedidos por jr ra / delay slot) en las
+# 4 tablas de despacho indirecto, excluyendo datos y saltos internos.
+# Tabla entry_type_handlers (0x8005B1D8, 21 entradas faltantes):
+0x800161F8
+0x800162FC
+0x80017198
+0x80017358
+0x800189C4  # gool_on_entry_nop (propuesto)
+0x8001EE64  # opat_init (propuesto)
+0x8001EFD8  # opat_fini (propuesto)
+0x8001F018  # opat_post_load (propuesto)
+0x8001F9C4  # ldat_post_load (propuesto)
+0x8001FDDC  # zdat_on_entry (propuesto)
+0x8001FF30  # zdat_on_unload (propuesto)
+0x80024188
+0x80027A38
+0x80027B9C
+0x80029768
+0x800297C8
+0x8002CB14
+0x8002FCD0
+0x8002FCE8
+0x800324A8
+0x80033D10
+# Tabla render_prep (0x8005B650, 3 entradas faltantes):
+0x8004400C
+0x80044178
+0x80044334
+# Tabla render_xform (0x8005B690, 8 restantes; 0x80044558 ya arriba):
+0x800443EC
+0x80044434
+0x80044468
+0x800444E0
+0x80044534
+0x80044594
+0x800446F0
+0x800447DC
+# Tabla svtx_prep_draw (0x8005B6D0..0x8005B7AF, 20 entradas faltantes):
+0x8003DD0C
+0x8003EBC4
+0x8003FB84
+0x8003FF14
+0x80040948
+0x80040B44
+0x80040FC4
+0x800417B0
+0x80041B80
+0x800432F4
+0x80043310
+0x80043324
+0x80043374
+0x800434EC
+0x80043504
+0x8004351C
+0x80043554
+0x80043594
+0x8004380C
+0x80044830  # sprite_billboard_draw (propuesto)

@@ -30,9 +30,9 @@ Registro vivo del análisis estático y dinámico de *Crash Bandicoot 2: Cortex 
 - [x] Primera tarea estática con el MCP: localizar quién escribe en `DAT_8003bea4` y qué función se registra con `VSyncCallback`; propuestas registradas en `re/provisional_symbols.csv`.
 - [x] Verificar dinámicamente en PCSX-Redux el ritmo de `DAT_8003bea4` (~34.5 ticks/cuadro = ~17.25 ticks/VSync), `0x80016838` (30 Hz) y la ISR `0x8003be88` 1:1 por cuadro (`001`, `002`, `003`); `0x80016868` dio `0/23` en pausa (queda pendiente solo si se prueba pantalla más ligera como título/carga).
 - [x] Instalar y configurar PCSX-Redux (Build `561`, commit `61e3086f`, intérprete + GDB puerto `3333`) y validar conexión con `scripts/gdb-psx`.
-- [ ] Localizar funciones PsyQ base (`SetGeomScreen`, `DrawOTag`, `VSync`, `CdRead`) y mapear XREFs.
-- [ ] Identificar sistema de carga de overlays (`CdRead` / tabla de módulos).
-- [ ] Localizar bucle principal (30 Hz), actualización de cámara, parámetros de proyección/recorte y lista de entidades.
+- [x] Localizar funciones PsyQ base (`SetGeomScreen`, `DrawOTag`, `VSync`, `CdRead`) y mapear XREFs (`005`–`008`).
+- [x] Identificar sistema de carga CD y bloques dinámicos (paginación NSD/NSF y bloques MIPS nativos en `sec[1]` de chunks `GOOL` tipo 11, `005`–`006`).
+- [x] Localizar bucle principal (30 Hz), actualización de cámara, parámetros de proyección/recorte (`512x216`, `5/8` en 3 rutas), lista de entidades (`gool_root_buckets` / `GoolObject`), `PadState` y `RNG` (`006`–`008`, promovidos a `re/symbols.csv` y `re/structs.h`).
 
 ---
 
@@ -469,7 +469,7 @@ Registro vivo del análisis estático y dinámico de *Crash Bandicoot 2: Cortex 
 
 ## 5. Resumen de hallazgos verificados
 
-### Confirmados (`re/symbols.csv`)
+### Confirmados (`re/symbols.csv`, 60 símbolos; estructuras en `re/structs.h`)
 
 | Dirección | Símbolo | Módulo | Experimento | Fecha |
 |---|---|---|---|---|
@@ -481,6 +481,58 @@ Registro vivo del análisis estático y dinámico de *Crash Bandicoot 2: Cortex 
 | `0x8004a38c` | `_send_pad` | `main` | `004` | 2026-11-15 |
 | `0x8004a424` | `_remove_ChgclrPAD` | `main` | `004` | 2026-11-15 |
 | `0x8004a354` | `FlushCache` | `main` | estático (`NOTES.md`) | 2026-11-15 |
+| `0x80016f04` | `quantize_frame_ticks` | `main` | `007` | 2026-11-15 |
+| `0x80069034` | `disc_file_table` | `main` | `005` | 2026-11-15 |
+| `0x80067588` | `nsd_paging_state` | `main` | `005` | 2026-11-15 |
+| `0x8005f3ec` | `current_level_id` | `main` | `005` | 2026-11-15 |
+| `0x8005f3f0` | `next_level_id` | `main` | `005` | 2026-11-15 |
+| `0x8003a014` | `gool_interpret` | `main` | `006` | 2026-11-15 |
+| `0x8003aad4` | `gool_op49_exec_mips` | `main` | `006` | 2026-11-15 |
+| `0x8005c514` | `gool_opcode_table` | `main` | `006` | 2026-11-15 |
+| `0x80016c58` | `draw_letterbox_and_fov` | `main` | `007` | 2026-11-15 |
+| `0x80017af8` | `cam_matrix_aspect_scale` | `main` | `006` | 2026-11-15 |
+| `0x80017bc4` | `cam_update` | `main` | `006` | 2026-11-15 |
+| `0x8003d3cc` | `model_view_matrix_build` | `main` | `008` | 2026-11-15 |
+| `0x80060884` | `geom_screen` | `main` | `006` | 2026-11-15 |
+| `0x80060754` | `cam_rot_matrix` | `main` | `006` | 2026-11-15 |
+| `0x80060774` | `cam_view_matrix` | `main` | `006` | 2026-11-15 |
+| `0x800607f4` | `cam_pos` | `main` | `006` | 2026-11-15 |
+| `0x80060800` | `cam_rot` | `main` | `006` | 2026-11-15 |
+| `0x800608cc` | `current_zone_entry` | `main` | `006` | 2026-11-15 |
+| `0x800608d4` | `current_cam_path` | `main` | `006` | 2026-11-15 |
+| `0x800608e0` | `cam_path_progress` | `main` | `006` | 2026-11-15 |
+| `0x8006cc20` | `geom_offset_x` | `main` | `006` | 2026-11-15 |
+| `0x8006cc24` | `geom_offset_y` | `main` | `006` | 2026-11-15 |
+| `0x8006cb78` | `cam_shake_y` | `main` | `006` | 2026-11-15 |
+| `0x8006cc94` | `letterbox_level` | `main` | `006` | 2026-11-15 |
+| `0x80063450` | `disp_ctx_front` | `main` | `006` | 2026-11-15 |
+| `0x80063454` | `disp_ctx_draw` | `main` | `006` | 2026-11-15 |
+| `0x80063458` | `disp_ctx_work` | `main` | `006` | 2026-11-15 |
+| `0x8006345c` | `display_ctx_pool` | `main` | `006` | 2026-11-15 |
+| `0x8006cb14` | `gool_object_pool` | `main` | `007` | 2026-11-15 |
+| `0x8006cb10` | `gool_player_slot` | `main` | `007` | 2026-11-15 |
+| `0x8006cb18` | `gool_root_buckets` | `main` | `007` | 2026-11-15 |
+| `0x8005f38c` | `gool_player_ptr` | `main` | `007` | 2026-11-15 |
+| `0x8001c718` | `gool_object_tick` | `main` | `007` | 2026-11-15 |
+| `0x8001d63c` | `gool_physics_step` | `main` | `007` | 2026-11-15 |
+| `0x8003db94` | `render_queue_flush` | `main` | `007` | 2026-11-15 |
+| `0x8001bd84` | `draw_text_3d` | `main` | `008` | 2026-11-15 |
+| `0x80043090` | `matrix_aspect_scale_local` | `main` | `007` | 2026-11-15 |
+| `0x80044558` | `hud_transform_2d` | `main` | `007` | 2026-11-15 |
+| `0x80016a60` | `draw_bg_tile` | `main` | `007` | 2026-11-15 |
+| `0x8006cb58` | `gool_free_bucket` | `main` | `007` | 2026-11-15 |
+| `0x8005f494` | `player_pos_copy` | `main` | `007` | 2026-11-15 |
+| `0x8006cb94` | `level_flags` | `main` | `007` | 2026-11-15 |
+| `0x8005f224` | `rng_b_seed` | `main` | `007` | 2026-11-15 |
+| `0x80069920` | `pad_states` | `main` | `008` | 2026-11-15 |
+| `0x8006991c` | `pad_count` | `main` | `007` | 2026-11-15 |
+| `0x8006cd14` | `demo_mode` | `main` | `007` | 2026-11-15 |
+| `0x80026ca0` | `cam_mode_dispatch` | `main` | `008` | 2026-11-15 |
+| `0x80020a24` | `zone_gfx_mode_apply` | `main` | `008` | 2026-11-15 |
+| `0x80062ad8` | `zone_gfx_flags` | `main` | `008` | 2026-11-15 |
+| `0x800608f0` | `cam_submode` | `main` | `008` | 2026-11-15 |
+| `0x8005b994` | `cam_trans_state` | `main` | `008` | 2026-11-15 |
+| `0x8006cbb4` | `ctrl_scale` | `main` | `008` | 2026-11-15 |
 
 ### Descartados
 
