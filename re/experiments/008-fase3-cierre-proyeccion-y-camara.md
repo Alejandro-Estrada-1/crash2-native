@@ -10,7 +10,7 @@ English | [Español](008-fase3-cierre-proyeccion-y-camara.es.md)
   ```bash
   PSX_GDB_PORT=3333 PSX_GDB_TIMEOUT=45 scripts/gdb-psx -batch -x re/experiments/008-fase3-cierre-proyeccion-y-camara.gdb
   # and in the PCSX-Redux Lua Console:
-  dofile("~/Descargas/PORTS/Crash2CSB/c2-re/re/experiments/008-pad-state.lua")
+  dofile(os.getenv("HOME") .. "/Descargas/PORTS/Crash2CSB/c2-re/re/experiments/008-pad-state.lua")
   ```
 - **Environment:** PCSX-Redux (`SCUS-94154`, active level `0x1e` / `30`, GDB `:3333`):
   - **GDB Pass 1 (playing level, no Pause):** start `$pc = 0x00001de4`.

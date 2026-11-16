@@ -10,7 +10,7 @@
   ```bash
   PSX_GDB_PORT=3333 PSX_GDB_TIMEOUT=45 scripts/gdb-psx -batch -x re/experiments/008-fase3-cierre-proyeccion-y-camara.gdb
   # y en Consola Lua de PCSX-Redux:
-  dofile("~/Descargas/PORTS/Crash2CSB/c2-re/re/experiments/008-pad-state.lua")
+  dofile(os.getenv("HOME") .. "/Descargas/PORTS/Crash2CSB/c2-re/re/experiments/008-pad-state.lua")
   ```
 - **Entorno:** PCSX-Redux (`SCUS-94154`, nivel activo `0x1e` / `30`, GDB `:3333`):
   - **Pasada 1 GDB (nivel jugando, sin Pausa):** inicio `$pc = 0x00001de4`.
