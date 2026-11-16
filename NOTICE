@@ -18,6 +18,11 @@ The original source code, tools, and documentation in this repository (`src/`,
 `tools/`, `scripts/`, `re/`, `patches/`, `docs/`, `packaging/`) are licensed
 under the MIT License (see `LICENSE`), Copyright (c) 2026 Alejandro Estrada.
 
+Scope note: the MIT License applies only to this repository's own source code.
+Any binary build or distribution linked against the `psxrecomp` framework is
+additionally governed by Section 3 below (PolyForm Noncommercial License
+1.0.0); see `LICENSE` and Section 3 for the full terms.
+
 
 3. psxrecomp Submodule (PolyForm Noncommercial License 1.0.0)
 -------------------------------------------------------------
