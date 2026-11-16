@@ -17,6 +17,19 @@
 # ignoró el SIGINT y hubo que matarlo con SIGKILL 5 s después.
 #
 # Usa un candado (flock): si otro experimento está en curso, espera hasta 5 minutos.
+#
+# Advertencia para experimentos: PCSX-Redux notifica cualquier pausa por excepción
+# de la CPU (p. ej. vector de excepciones en 0x80000080) como T05 (SIGTRAP) en el
+# servidor GDB; un "continue" en el .gdb puede detenerse ahí antes del breakpoint
+# esperado.
+#
+# Al conectarse, antes del experimento, verifica que "target remote" haya enganchado
+# (si $_thread == 0 sale de inmediato con código 86 sin volcar la BIOS ni reanudar)
+# y vuelca los primeros 0x1000 bytes (4 KiB) de la ROM de la BIOS (0xbfc00000..0xbfc01000)
+# a un temporal. Al terminar GDB, bash calcula e imprime
+# "BIOS sha256 (0xbfc00000+0x1000): <hash> (<nombre>)" (o "(desconocida)" si no está
+# en la tabla, o "NO DISPONIBLE ..." si el volcado falla) y borra el temporal.
+# El volcado cuenta dentro de PSX_GDB_TIMEOUT.
 
 set -uo pipefail
 
@@ -37,6 +50,12 @@ GDB_INIT=(
   -iex "set architecture mips:3000"
   -iex "set pagination off"
   -iex "set confirm off"
+  # No reintentar 15 s en TCP si el servidor GDB no está escuchando.
+  -iex "set tcp auto-retry off"
+  -iex "set tcp connect-timeout 3"
+  # PCSX-Redux anuncia PacketSize=47ff pero el volcado de BIOS se cuelga sin
+  # acotar la lectura de memoria antes de "target remote".
+  -iex "set remote memory-read-packet-size 256"
   -ex  "target remote localhost:${PORT}"
 )
 
@@ -62,9 +81,63 @@ reanudar_emulador() {
   ' _ "${port}"
 }
 
+# Hash de los primeros 4 KiB de la BIOS: GDB solo los vuelca a un temporal y
+# bash calcula el sha256 al terminar (sin usar "shell" dentro de GDB, porque
+# bajo timeout queda en un grupo en segundo plano y cualquier subshell bloquea).
+imprimir_bios_sha256() {
+  local rom="$1"
+  local hash nombre
+  if [ -f "${rom}" ] && [ "$(stat -c %s -- "${rom}")" -eq 4096 ]; then
+    hash="$(sha256sum -- "${rom}" | cut -d' ' -f1)"
+    case "${hash}" in
+      d9908265377045f1b62638e8b54b558fec7bb13d840b8122dec36d19c1b10d89)
+        nombre="OpenBIOS psxrecomp 55fbf04" ;;
+      870563babc435b1027ab59237eb150e2f95ffe385f9d29830f45e1e038fc351e)
+        nombre="OpenBIOS PCSX-Redux build 561" ;;
+      *)
+        nombre="desconocida" ;;
+    esac
+    printf 'BIOS sha256 (0xbfc00000+0x1000): %s (%s)\n' "${hash}" "${nombre}"
+  else
+    printf 'BIOS sha256 (0xbfc00000+0x1000): NO DISPONIBLE (no se pudo volcar 0xbfc00000..0xbfc01000)\n'
+  fi
+  rm -f -- "${rom}"
+}
+
+BIOS_TMP="$(mktemp -d "${XDG_RUNTIME_DIR:-/tmp}/gdb-psx.XXXXXX")" || {
+  echo "gdb-psx: no pude crear el directorio temporal para el volcado de la BIOS." >&2
+  exit 1
+}
+trap 'rm -rf -- "${BIOS_TMP}"' EXIT
+# GDB no admite espacios ni comillas sin escapar en el nombre de archivo de "dump".
+case "${BIOS_TMP}" in
+  *[!A-Za-z0-9/._-]*)
+    echo "gdb-psx: la ruta temporal '${BIOS_TMP}' tiene caracteres que GDB no acepta; define XDG_RUNTIME_DIR." >&2
+    exit 1 ;;
+esac
+# En GDB -batch, un fallo en "target remote" no detiene los -ex/-x siguientes.
+# Si $_thread sigue en 0 tras conectar, salimos enseguida con código 86 sin
+# usar "shell" antes de volcar la BIOS o ejecutar el experimento.
+CHECK_CONNECT="${BIOS_TMP}/check_connect.gdb"
+cat > "${CHECK_CONNECT}" <<'EOF'
+if $_thread == 0
+  quit 86
+end
+EOF
+
+BIOS_ROM="${BIOS_TMP}/bios.bin"
+BIOS_HASH=(
+  -ex "dump binary memory ${BIOS_ROM} 0xbfc00000 0xbfc01000"
+)
+
 inicio=${SECONDS}
-timeout --signal=INT --kill-after=5 "${TIMEOUT}" "${GDB}" "${GDB_INIT[@]}" "$@"
+timeout --signal=INT --kill-after=5 "${TIMEOUT}" "${GDB}" "${GDB_INIT[@]}" -x "${CHECK_CONNECT}" "${BIOS_HASH[@]}" "$@"
 status=$?
+
+if [ "${status}" -eq 86 ]; then
+  echo "gdb-psx: error: no se pudo conectar con el servidor GDB en localhost:${PORT} (¿PCSX-Redux abierto con GDB activo?)." >&2
+  exit 1
+fi
 
 # timeout sale con 124 si GDB terminó tras el SIGINT. Si GDB lo ignora, a los 5 s
 # --kill-after manda SIGKILL a todo el grupo, timeout incluido, y el código es 137.
@@ -77,6 +150,8 @@ if [ "${status}" -eq 124 ] ||
 elif [ "${status}" -eq 137 ]; then
   echo "gdb-psx: GDB terminó por SIGKILL antes del timeout." >&2
 fi
+
+imprimir_bios_sha256 "${BIOS_ROM}"
 
 if ! reanudar_emulador "${PORT}"; then
   echo "gdb-psx: AVISO: no pude reanudar el emulador (¿otro cliente conectado?); reanuda PCSX-Redux a mano." >&2
