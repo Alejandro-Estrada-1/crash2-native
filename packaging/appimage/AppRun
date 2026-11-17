@@ -509,6 +509,14 @@ prepare_project_tree "${DATA_DIR}"
 prepare_toolchain_env "${DATA_DIR}"
 prepare_overlay_toolchain "${DATA_DIR}"
 
+# psxrecomp prioritizes $APPIMAGE over argv[0] and /proc/self/exe when locating
+# bios/, game.toml, and saves/. Preserve the outer AppImage path for UI helpers
+# and clear APPIMAGE before execing setup_link or built_exe under DATA_DIR.
+appimage_path="${APPIMAGE:-}"
+export CRASH2NATIVE_APPIMAGE_PATH="${appimage_path}"
+export RECOMP_APPIMAGE_PATH="${appimage_path}"
+unset APPIMAGE || true
+
 built_exe="${DATA_DIR}/build-release/crash2_native"
 if [ ! -x "${built_exe}" ] || [ "${force_setup}" = "1" ]; then
   check_build_prereqs
