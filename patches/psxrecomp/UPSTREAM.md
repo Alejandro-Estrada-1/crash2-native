@@ -252,3 +252,24 @@ Tested on 2026-11-15 with Zig `0.17.1` (Clang `22.1.8`) against `psxrecomp`
   when squash mode (`mode == 1`) is active (leaving `4:3` as identity `1:1`
   and leaving native-wide `mode == 2` untouched), plus
   `psx_ws_refresh_projection_live()` for live FOV option updates.
+
+---
+
+## 11. `ensure_emitters()` ignores `PSXRECOMP_GAME` / `PSXRECOMP_BIOS` when `recompiler/` sources are present
+
+- **Where:** `psxrecomp_cli.py` (`ensure_emitters()`).
+- **What happens:** when `force=False`, `ensure_emitters()` checks
+  `recompiler_source_dir(project_root)` (`psxrecomp/recompiler/CMakeLists.txt`).
+  If the sources exist — as required in bundled AppImage SDKs because
+  `runtime/runtime.cmake` and `codegen_hash_sources.cmake` reference
+  `recompiler/{src,include,lib,seeds}` — it unconditionally attempts to
+  configure and build inside `psxrecomp/recompiler/build`, ignoring valid
+  `PSXRECOMP_GAME` and `PSXRECOMP_BIOS` environment overrides and failing with
+  `[Errno 30] Read-only file system` on read-only AppImage mounts.
+- **Local patch (upstream candidate):**
+  [`0005-use-prestaged-emitters-from-env.patch`](0005-use-prestaged-emitters-from-env.patch),
+  which short-circuits inside `ensure_emitters()` when `force=False` and both
+  `PSXRECOMP_GAME` and `PSXRECOMP_BIOS` point to existing files, resolving
+  them through `find_emitters(project_root)` without configuring
+  `psxrecomp/recompiler/build`. When either variable is unset/missing or
+  `--force-emitters` is passed, upstream build behavior is unchanged.

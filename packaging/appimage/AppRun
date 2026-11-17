@@ -232,13 +232,23 @@ clean_dangling_links() {
 link_entries_except() {
   src_dir="$1"
   dst_dir="$2"
-  skip_name="$3"
+  shift 2
+  if [ -L "${dst_dir}" ]; then
+    rm -f "${dst_dir}"
+  fi
   mkdir -p "${dst_dir}"
   clean_dangling_links "${dst_dir}"
   for item in "${src_dir}"/*; do
     [ -e "$item" ] || continue
     name=${item##*/}
-    if [ "$name" = "$skip_name" ]; then
+    skip=0
+    for excluded in "$@"; do
+      if [ "$name" = "$excluded" ]; then
+        skip=1
+        break
+      fi
+    done
+    if [ "$skip" = "1" ]; then
       continue
     fi
     ln -sfn "$item" "${dst_dir}/${name}"
@@ -303,9 +313,12 @@ prepare_project_tree() {
     fi
   done
 
-  # psxrecomp/ needs a writable runtime/include because hash_codegen.cmake
-  # checks or regenerates overlay_codegen_hash.h inside that directory.
-  link_entries_except "${link_base}/psxrecomp" "${project}/psxrecomp" "runtime"
+  # psxrecomp/ needs writable directories for bios/ (retail --bios staging),
+  # generated/ (OpenBIOS + SCPH1001 C backends), and runtime/include/
+  # (hash_codegen.cmake checks or regenerates overlay_codegen_hash.h there).
+  link_entries_except "${link_base}/psxrecomp" "${project}/psxrecomp" "runtime" "bios" "generated"
+  link_entries_except "${link_base}/psxrecomp/bios" "${project}/psxrecomp/bios" "SCPH1001.BIN"
+  link_entries_except "${link_base}/psxrecomp/generated" "${project}/psxrecomp/generated"
   link_entries_except "${link_base}/psxrecomp/runtime" "${project}/psxrecomp/runtime" "include"
   link_entries_except "${link_base}/psxrecomp/runtime/include" "${project}/psxrecomp/runtime/include" "overlay_codegen_hash.h"
   rm -f "${project}/psxrecomp/runtime/include/overlay_codegen_hash.h"
