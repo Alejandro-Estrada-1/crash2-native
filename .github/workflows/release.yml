@@ -20,6 +20,10 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'workflow_dispatch' }}
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   build-appimage:
     name: Build AppImage (ubuntu:22.04)
