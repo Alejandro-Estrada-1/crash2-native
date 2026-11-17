@@ -152,6 +152,25 @@ jobs:
           rc=0; "${APP}" --appimage-extract-and-run --verify-disc --config "${TMPD}/bad.toml" >/dev/null || rc=$?
           test "${rc}" -eq 3
 
+          # Verify real AppImage runtime launch (type2-runtime exports $APPIMAGE):
+          # AppRun must preserve APPIMAGE in CRASH2NATIVE_APPIMAGE_PATH / RECOMP_APPIMAGE_PATH
+          # and unset APPIMAGE so psxrecomp resolves bios/ and game.toml from DATA_DIR.
+          REAL_DATA="${TMPD}/real-run"
+          rc=0
+          APP_LOG="$(CRASH2NATIVE_DATA_DIR="${REAL_DATA}" "${APP}" --appimage-extract-and-run --no-launcher --help 2>&1)" || rc=$?
+          printf '%s\n' "${APP_LOG}"
+          test "${rc}" -ne 0
+          if printf '%s\n' "${APP_LOG}" | grep -qF "Bundled BIOS Missing"; then
+            echo "error: .AppImage aborted with Bundled BIOS Missing (APPIMAGE leaked into runtime)" >&2
+            exit 1
+          fi
+          if ! printf '%s\n' "${APP_LOG}" | grep -qF "psxrecomp: loaded game config ${REAL_DATA}/game.toml"; then
+            echo "error: .AppImage did not load game.toml from temporary CRASH2NATIVE_DATA_DIR (${REAL_DATA})" >&2
+            exit 1
+          fi
+          test -f "${REAL_DATA}/bios/openbios.bin"
+          test -f "${REAL_DATA}/build-release/overlay_toolchain/python/bin/python3"
+
           # Verify extracted read-only AppImage + overlay_toolchain with tomli
           (cd "${TMPD}" && "${GITHUB_WORKSPACE}/${APP}" --appimage-extract >/dev/null)
           SQ="${TMPD}/squashfs-root"
