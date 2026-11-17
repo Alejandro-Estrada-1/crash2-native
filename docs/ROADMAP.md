@@ -180,7 +180,7 @@ crash2-native/
 - [x] AppImage with Zig `0.17.1`, trimmed CMake, Ninja, `tomli`, pinned `type2-runtime`, user data in `~/.local/share/crash2-native/`.
 - [x] `release.yml`: tag-driven version, AppImage + `SHA256SUMS`.
 - [x] Run remote `ci.yml` and `release.yml` (`workflow_dispatch` dry-run) on GitHub Actions and verify on Arch + Ubuntu 22.04.
-- [ ] Tag `v0.1.0` to publish the milestone AppImage on GitHub Releases and verify the tagged release on Arch + Ubuntu 22.04.
+- [x] Tag `v0.1.0` to publish the milestone AppImage on GitHub Releases and verify the tagged release on Arch + Ubuntu 22.04.
 
 **Done when:** tag `v0.1.0` produces an AppImage on GitHub Actions that runs on Arch and Ubuntu 22.04.
 

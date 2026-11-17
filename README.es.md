@@ -12,7 +12,7 @@ Port nativo para Linux de *Crash Bandicoot 2: Cortex Strikes Back* (PS1, EUA, `S
 > **No incluye datos del juego ni BIOS de Sony.** Este repositorio y sus releases AppImage no contienen imágenes de disco (`.bin`, `.cue`, `.chd`, `.iso`), ejecutables extraídos ni activos protegidos. Debes aportar tu propia copia legítima de EUA de *Crash Bandicoot 2* (`SCUS-94154`), verificada estrictamente contra los hashes de Redump (`CRC-32: 395c0916`, `MD5: 3c31b5e038f025098a2fdfa70c8213f2`, `SHA-1: 3d37fe4288a83b01f1a0edbf78e76e0fede6bc22`, `192,814,608` bytes).
 
 > [!WARNING]
-> **En desarrollo activo y uso estrictamente no comercial.** Las fases 0 a 5 (base de compilación, ingeniería inversa *clean-room* de tiempo/cámara/entidades, `verify-disc`, CI, empaquetado AppImage, recorte `512x216` y mod `16:9`) están completas (`ci.yml` y dry-run de `release.yml` verificados en GitHub Actions, `ubuntu:22.04` y Arch Linux); siguen interpolación de FPS altos (Fase 6) y pruebas de regresión deterministas (Fase 7). Todo binario enlazado con `psxrecomp` queda regido por **PolyForm Noncommercial License 1.0.0**.
+> **En desarrollo activo y uso estrictamente no comercial.** Las fases 0 a 5 (base de compilación, ingeniería inversa *clean-room* de tiempo/cámara/entidades, `verify-disc`, CI, release AppImage `v0.1.0` verificado en `ubuntu:22.04` y Arch, recorte `512x216` y mod `16:9`) están completas; siguen interpolación de FPS altos (Fase 6) y pruebas de regresión deterministas (Fase 7). Todo binario enlazado con `psxrecomp` queda regido por **PolyForm Noncommercial License 1.0.0**.
 
 > [!NOTE]
 > **Hecho con apoyo de IA y verificado por una persona.** El código del port, la infraestructura y las notas de ingeniería inversa se producen con agentes de IA bajo revisión humana, siguiendo las reglas *clean-room* de [`AGENTS.es.md`](AGENTS.es.md). Nada se publica solo porque un agente lo afirme: únicamente el responsable promueve un símbolo, y solo tras confirmarlo en el emulador. Ver [Desarrollo asistido por IA](#desarrollo-asistido-por-ia).
@@ -39,7 +39,7 @@ Consulta [docs/ROADMAP.es.md](docs/ROADMAP.es.md) para ver el detalle completo d
 |---|---|---|
 | 0–2 | Estructura del repo, integración de `psxrecomp` + `recomp-ui`, configuración Redump y compilación a 30 FPS en Linux | Completa |
 | 3 | Ingeniería inversa *clean-room* (`001`–`008`): reloj, paginación NSD/NSF, bloques MIPS en GOOL, cámara, escala `5/8`, `GoolObject`, `PadState`, `RNG`, 60 símbolos confirmados, `re/structs.h` y 803 semillas | Completa |
-| 4 | `tools/verify-disc` (Rust), `LICENSE`/`NOTICE`, CI en `ubuntu:22.04`, AppImage autocontenido + `release.yml` | Completa (`ci.yml` + dry-run de `release.yml` verificados en GitHub Actions, `ubuntu:22.04` y Arch) |
+| 4 | `tools/verify-disc` (Rust), `LICENSE`/`NOTICE`, CI en `ubuntu:22.04`, AppImage autocontenido + `release.yml` | Completa (`v0.1.0` publicada; verificada en `ubuntu:22.04` y Arch) |
 | 5 | Pantalla ancha: recorte `512x216` (`40:27`) + mod `Widescreen (16:9)` (apertura `1.125x`/`1.10x`/`1.20x`) preservando escala `5/8` | Completa |
 | 6–7 | Interpolación de cuadros (60/120/144 Hz), pruebas en `tools/regress` y release público | Planificada |
 
