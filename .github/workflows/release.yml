@@ -188,6 +188,68 @@ jobs:
           CRASH2NATIVE_DATA_DIR="${TMPD}/user-data" APPDIR="${SQ}" "${SQ}/AppRun" --no-launcher --help || rc=$?
           test "${rc}" -ne 0
           "${TMPD}/user-data/build-release/overlay_toolchain/python/bin/python3" -c "import tomli"
+
+          UD_PROJ="${TMPD}/user-data/project"
+          test -d "${UD_PROJ}/psxrecomp/bios" && test ! -L "${UD_PROJ}/psxrecomp/bios"
+          test -d "${UD_PROJ}/psxrecomp/generated" && test ! -L "${UD_PROJ}/psxrecomp/generated"
+          test -d "${UD_PROJ}/psxrecomp/runtime/include" && test ! -L "${UD_PROJ}/psxrecomp/runtime/include"
+          test -L "${UD_PROJ}/psxrecomp/generated/OpenBIOS_dispatch.c"
+
+          # Verify psxrecomp_cli.py ensure-emitters + generate against read-only AppDir
+          # using a synthetic PS-X EXE and AppRun's staged env (never creates recompiler/build).
+          python3 -B - "${TMPD}" "${UD_PROJ}" <<'PY'
+          import pathlib, struct, zlib, sys
+          tmpd = pathlib.Path(sys.argv[1])
+          proj = pathlib.Path(sys.argv[2])
+          exe = bytearray(4096)
+          exe[0:8] = b"PS-X EXE"
+          struct.pack_into("<III", exe, 0x10, 0x80010000, 0, 0x80010000)
+          struct.pack_into("<I", exe, 0x1C, 2048)
+          struct.pack_into("<II", exe, 0x800, 0x03E00008, 0x00000000)
+          (proj / "prepared_disc" / "TEST_000.01").write_bytes(exe)
+          payload = b"SYNTH_PSX_SECTOR_" * 128
+          (tmpd / "synth_gen.bin").write_bytes(payload)
+          (proj / "synth_seeds.txt").write_text("", encoding="utf-8")
+          (proj / "synth_gen.toml").write_text(
+              '[game]\n'
+              'name = "SynthTest"\n'
+              'id = "TEST-00001"\n'
+              'exe = "prepared_disc/TEST_000.01"\n'
+              'disc = "synth_gen.bin"\n'
+              'load_address = "0x80010000"\n'
+              'entry_pc = "0x80010000"\n'
+              'text_size = "0x00000800"\n'
+              'stack_base = "0x801FFFF0"\n\n'
+              '[prepare_disc]\n'
+              'out_dir = "prepared_disc"\n'
+              'boot_exe = "TEST_000.01"\n'
+              f'known_sizes = [{len(payload)}]\n'
+              f'known_crc32 = ["{zlib.crc32(payload) & 0xffffffff:08x}"]\n\n'
+              '[recompiler]\n'
+              'seeds = "synth_seeds.txt"\n'
+              'out_dir = "generated-synth"\n',
+              encoding="utf-8",
+          )
+          PY
+          env -C "${TMPD}" \
+            PATH="${TMPD}/user-data/toolchain/bin:${PATH}" \
+            PSXRECOMP_GAME="${TMPD}/user-data/toolchain/bin/psxrecomp-game" \
+            PSXRECOMP_BIOS="${TMPD}/user-data/toolchain/bin/psxrecomp-bios" \
+            python3 -B "${UD_PROJ}/psxrecomp/psxrecomp_cli.py" ensure-emitters \
+              --project-root "${UD_PROJ}" \
+              --no-download
+          env -C "${TMPD}" \
+            PATH="${TMPD}/user-data/toolchain/bin:${PATH}" \
+            PSXRECOMP_GAME="${TMPD}/user-data/toolchain/bin/psxrecomp-game" \
+            PSXRECOMP_BIOS="${TMPD}/user-data/toolchain/bin/psxrecomp-bios" \
+            python3 -B "${UD_PROJ}/psxrecomp/psxrecomp_cli.py" generate \
+              --config "${UD_PROJ}/synth_gen.toml" \
+              --project-root "${UD_PROJ}" \
+              --disc "${TMPD}/synth_gen.bin" \
+              --no-toolchain-download
+          test -f "${UD_PROJ}/generated-synth/TEST_000.01_dispatch.c"
+          test ! -e "${SQ_PAY}/psxrecomp/recompiler/build"
+          test ! -e "${UD_PROJ}/psxrecomp/recompiler/build"
           chmod -R u+w "${SQ}"
 
       - name: Generate SHA256SUMS

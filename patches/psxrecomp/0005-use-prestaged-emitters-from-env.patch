@@ -1,0 +1,25 @@
+diff --git a/psxrecomp_cli.py b/psxrecomp_cli.py
+index 7c85bea3..9e4ca6ad 100755
+--- a/psxrecomp_cli.py
++++ b/psxrecomp_cli.py
+@@ -411,6 +411,20 @@ def ensure_emitters(
+     Generate & rebuild without a pre-staged setup-host SDK.
+     """
+     if not force:
++        # Respect explicit pre-staged emitter overrides (e.g. read-only AppImage
++        # SDKs that still keep recompiler/ sources for runtime CMake) so
++        # ensure_emitters() does not configure/build psxrecomp/recompiler/build.
++        env_game = os.environ.get("PSXRECOMP_GAME", "").strip()
++        env_bios = os.environ.get("PSXRECOMP_BIOS", "").strip()
++        if (
++            env_game
++            and env_bios
++            and Path(env_game).expanduser().is_file()
++            and Path(env_bios).expanduser().is_file()
++        ):
++            game, bios = find_emitters(project_root)
++            progress.log(f"Emitters ready: {game}, {bios}")
++            return game, bios
+         # With the framework's recompiler sources present, always run the
+         # (incremental) build: a binary that merely exists may predate the
+         # sources -- a submodule moved to another revision -- and would emit

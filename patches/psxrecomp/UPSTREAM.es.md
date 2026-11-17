@@ -233,3 +233,24 @@ emisores en `psxrecomp/recompiler`.
   `gpu_apply_widescreen_projection_aspect`) dentro de `refresh_widescreen_projection()`
   (dejando `4:3` como identidad `1:1` y sin alterar `mode == 2`), además de
   `psx_ws_refresh_projection_live()` para cambios de opción en vivo.
+
+---
+
+## 11. `ensure_emitters()` ignora `PSXRECOMP_GAME` / `PSXRECOMP_BIOS` cuando hay fuentes en `recompiler/`
+
+- **Dónde:** `psxrecomp_cli.py` (`ensure_emitters()`).
+- **Qué ocurre:** con `force=False`, `ensure_emitters()` comprueba
+  `recompiler_source_dir(project_root)` (`psxrecomp/recompiler/CMakeLists.txt`).
+  Si las fuentes existen — como ocurre en SDKs AppImage donde
+  `runtime/runtime.cmake` y `codegen_hash_sources.cmake` usan
+  `recompiler/{src,include,lib,seeds}` — intenta incondicionalmente
+  configurar y compilar dentro de `psxrecomp/recompiler/build`, ignorando las
+  variables `PSXRECOMP_GAME` y `PSXRECOMP_BIOS` ya configuradas y fallando con
+  `[Errno 30] Read-only file system` sobre montajes AppImage de solo lectura.
+- **Parche local (candidato a upstream):**
+  [`0005-use-prestaged-emitters-from-env.patch`](0005-use-prestaged-emitters-from-env.patch),
+  que en `ensure_emitters()` con `force=False` verifica si `PSXRECOMP_GAME` y
+  `PSXRECOMP_BIOS` apuntan a archivos existentes y los resuelve directamente vía
+  `find_emitters(project_root)` sin tocar `psxrecomp/recompiler/build`. Cuando
+  falta alguna variable o se pasa `--force-emitters`, el flujo original no
+  cambia.
