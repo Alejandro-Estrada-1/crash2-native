@@ -137,6 +137,7 @@ If `--check-prereqs` reports missing packages, install them for your distributio
 | `packaging/appimage/` | Portable AppImage builder, `AppRun`, desktop entry, and Ubuntu 22.04 check findings | [CHECK_FINDINGS.md](packaging/appimage/CHECK_FINDINGS.md) |
 | `scripts/` | Setup, Linux build, PCSX-Redux GDB wrapper, and save backup utilities | — |
 | `docs/` | Architecture decisions, Redump reference, and roadmap | [ROADMAP.md](docs/ROADMAP.md) |
+| `CHANGELOG.md` | Per-release additions and fixes (English + Spanish mirror) | [CHANGELOG.md](CHANGELOG.md) |
 | `AGENTS.md`, `CLAUDE.md`, `GEMINI.md` | Working rules for humans and AI agents: clean-room policy, per-role scope, and the mandatory verification cycle | [AGENTS.md](AGENTS.md) |
 
 ---

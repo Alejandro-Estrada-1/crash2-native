@@ -137,6 +137,7 @@ Si `--check-prereqs` indica paquetes faltantes, instálalos según tu distribuci
 | `packaging/appimage/` | Empaquetado AppImage, `AppRun`, archivo `.desktop` y hallazgos en Ubuntu 22.04 | [CHECK_FINDINGS.es.md](packaging/appimage/CHECK_FINDINGS.es.md) |
 | `scripts/` | Scripts de entorno, compilación en Linux, wrapper GDB para PCSX-Redux y respaldo de partidas | — |
 | `docs/` | Decisiones de arquitectura, referencia Redump y hoja de ruta | [ROADMAP.es.md](docs/ROADMAP.es.md) |
+| `CHANGELOG.md` | Lista de novedades y correcciones por versión (inglés + español) | [CHANGELOG.es.md](CHANGELOG.es.md) |
 | `AGENTS.md`, `CLAUDE.md`, `GEMINI.md` | Reglas de trabajo para personas y agentes de IA: política *clean-room*, alcance por rol y ciclo obligatorio de verificación | [AGENTS.es.md](AGENTS.es.md) |
 
 ---
