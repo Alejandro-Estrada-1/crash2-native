@@ -94,14 +94,10 @@ jobs:
           key: appimage-tools-zig0.17.1-cmake3.31.6-ninja1.12.1-tomli2.2.1-appimagetool1.9.1-type2-20251108
 
       - name: Build AppImage
-        env:
-          SOURCE_DATE_EPOCH: ${{ github.event.head_commit.timestamp || '' }}
         run: |
           set -euo pipefail
           VER="${{ steps.meta.outputs.version }}"
-          if [[ -z "${SOURCE_DATE_EPOCH}" ]]; then
-            SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
-          fi
+          SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
           export SOURCE_DATE_EPOCH
           bash packaging/appimage/build-appimage.sh \
             --version "${VER}" \
