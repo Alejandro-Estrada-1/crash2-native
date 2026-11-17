@@ -77,6 +77,31 @@ if [[ "$(uname -s)" != "Linux" || "$(uname -m)" != "x86_64" ]]; then
   exit 1
 fi
 
+# Zig/Clang rejects non-integer or out-of-range SOURCE_DATE_EPOCH (e.g. ISO-8601
+# timestamps from CI events). Normalize it up front before invoking any tool.
+normalize_source_date_epoch() {
+  local raw="${1:-}"
+  local max_epoch=253402300799
+  raw="${raw#"${raw%%[![:space:]]*}"}"
+  raw="${raw%"${raw##*[![:space:]]}"}"
+  if [[ -n "${raw}" && ! "${raw}" =~ ^[0-9]+$ ]]; then
+    raw="$(date -u -d "${raw}" +%s 2>/dev/null || true)"
+  fi
+  if [[ ! "${raw}" =~ ^[0-9]+$ ]]; then
+    raw="$(git -C "${REPO_ROOT}" log -1 --format=%ct 2>/dev/null || echo 0)"
+  fi
+  while [[ "${raw}" == 0?* ]]; do
+    raw="${raw#0}"
+  done
+  if [[ ! "${raw}" =~ ^[0-9]+$ ]] || (( ${#raw} > 12 )) || (( raw > max_epoch )); then
+    raw=0
+  fi
+  printf '%s\n' "${raw}"
+}
+
+SOURCE_DATE_EPOCH="$(normalize_source_date_epoch "${SOURCE_DATE_EPOCH:-}")"
+export SOURCE_DATE_EPOCH
+
 # Official SHA-256 pinned tool and runtime downloads.
 ZIG_URL="https://ziglang.org/download/0.17.1/zig-x86_64-linux-0.17.1.tar.xz"
 ZIG_SHA256="3581863e3cbcfd0fce0efc682ce7e9e93da96668a977791d356a26d2a7e9b17a"
@@ -382,9 +407,6 @@ for bin in "${APPDIR}/usr/bin/${EXE_BASENAME}" "${APPDIR}/usr/bin/verify-disc" "
   fi
 done
 
-SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-$(git -C "${REPO_ROOT}" log -1 --format=%ct 2>/dev/null || echo 0)}"
-[[ "${SOURCE_DATE_EPOCH}" =~ ^[0-9]+$ ]] || SOURCE_DATE_EPOCH=0
-export SOURCE_DATE_EPOCH
 find "${APPDIR}" -exec touch -h -d "@${SOURCE_DATE_EPOCH}" {} +
 
 rm -f "${OUTPUT}" "${OUTPUT}.sha256"
