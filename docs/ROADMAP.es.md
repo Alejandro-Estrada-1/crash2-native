@@ -179,7 +179,8 @@ crash2-native/
 - [x] `ci.yml`: compilar y probar sin disco en `container: ubuntu:22.04`.
 - [x] AppImage con Zig `0.17.1`, CMake recortado, Ninja, `tomli`, `type2-runtime` fijado y datos de usuario en `~/.local/share/crash2-native/`.
 - [x] `release.yml`: versión desde la etiqueta, AppImage + `SHA256SUMS`.
-- [ ] Ejecutar en remoto `ci.yml` y `release.yml` (`workflow_dispatch` / `v0.1.0`) en GitHub Actions y validar en Arch + Ubuntu 22.04.
+- [x] Ejecutar en remoto `ci.yml` y `release.yml` (dry-run con `workflow_dispatch`) en GitHub Actions y validar en Arch + Ubuntu 22.04.
+- [ ] Crear etiqueta `v0.1.0` para publicar el AppImage hito en GitHub Releases y validar la versión etiquetada en Arch + Ubuntu 22.04.
 
 **Listo cuando:** una etiqueta `v0.1.0` produce un AppImage en GitHub Actions que corre en Arch y en Ubuntu 22.04.
 

@@ -12,7 +12,7 @@ Native Linux port of *Crash Bandicoot 2: Cortex Strikes Back* (PS1, USA, `SCUS-9
 > **No game data or Sony BIOS is included.** This repository and its AppImage releases contain zero disc images (`.bin`, `.cue`, `.chd`, `.iso`), extracted executables, or copyrighted assets. You must provide your own legitimate USA copy of *Crash Bandicoot 2* (`SCUS-94154`), strictly verified against Redump digests (`CRC-32: 395c0916`, `MD5: 3c31b5e038f025098a2fdfa70c8213f2`, `SHA-1: 3d37fe4288a83b01f1a0edbf78e76e0fede6bc22`, `192,814,608` bytes).
 
 > [!WARNING]
-> **Active development & noncommercial restriction.** Phases 0 through 5 (base compilation, clean-room reverse engineering of timing/camera/entities, `verify-disc`, CI, AppImage packaging, `512x216` overscan crop, and `16:9` widescreen mod) are complete locally; high-FPS interpolation (Phase 6) and deterministic regression tests (Phase 7) are next. Any binary linked against `psxrecomp` is subject to the **PolyForm Noncommercial License 1.0.0**.
+> **Active development & noncommercial restriction.** Phases 0 through 5 (base compilation, clean-room reverse engineering of timing/camera/entities, `verify-disc`, CI, AppImage packaging, `512x216` overscan crop, and `16:9` widescreen mod) are complete (`ci.yml` and `release.yml` dry-run verified on GitHub Actions, `ubuntu:22.04`, and Arch Linux); high-FPS interpolation (Phase 6) and deterministic regression tests (Phase 7) are next. Any binary linked against `psxrecomp` is subject to the **PolyForm Noncommercial License 1.0.0**.
 
 > [!NOTE]
 > **Built with AI assistance, verified by a human.** Port code, infrastructure, and reverse-engineering notes are produced with AI coding agents under human review, following the clean-room rules in [`AGENTS.md`](AGENTS.md). Nothing is published on an agent's word alone: only the maintainer promotes a symbol, and only after it has been confirmed in the emulator. See [AI-Assisted Development](#ai-assisted-development).
@@ -39,7 +39,7 @@ See [docs/ROADMAP.md](docs/ROADMAP.md) for the full phase breakdown and rational
 |---|---|---|
 | 0–2 | Repo layout, `psxrecomp` + `recomp-ui` integration, Redump config, 30 FPS Linux build | Complete |
 | 3 | Clean-room RE (`001`–`008`): timing, NSD/NSF paging, GOOL MIPS blocks, camera, `5/8` scaling, `GoolObject`, `PadState`, `RNG`, 60 confirmed symbols, `re/structs.h`, 803 seeds | Complete |
-| 4 | `tools/verify-disc` (Rust), `LICENSE`/`NOTICE`, `ubuntu:22.04` CI, self-contained AppImage + `release.yml` | Complete locally (GitHub Actions validation pending billing lock unlock) |
+| 4 | `tools/verify-disc` (Rust), `LICENSE`/`NOTICE`, `ubuntu:22.04` CI, self-contained AppImage + `release.yml` | Complete (`ci.yml` + `release.yml` dry-run verified on GitHub Actions, `ubuntu:22.04`, and Arch) |
 | 5 | Widescreen: `512x216` (`40:27`) overscan crop + `Widescreen (16:9)` mod (`1.125x`/`1.10x`/`1.20x` FOV opening) preserving `5/8` GTE scaling | Complete |
 | 6–7 | Frame interpolation (60/120/144 Hz), `tools/regress` replay checks, public release | Planned |
 
